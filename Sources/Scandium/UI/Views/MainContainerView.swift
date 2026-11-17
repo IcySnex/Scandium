@@ -11,10 +11,10 @@ enum ScandiumTab: Int, CaseIterable {
 
     func title(settings: AppSettings) -> String {
         switch self {
-        case .home: return settings.loc("Trang chủ", "Home")
-        case .search: return settings.loc("Tìm kiếm", "Search")
-        case .library: return settings.loc("Thư viện", "Library")
-        case .profile: return settings.loc("Cá nhân", "Profile")
+        case .home: return "Home"
+        case .search: return "Search"
+        case .library: return "Library"
+        case .profile: return "Profile"
         }
     }
 
@@ -42,14 +42,16 @@ struct MainContainerView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // True OLED Black base background with subtle artwork blur
-            AmbientCanvasBackground(
-                artworkURL: player.currentTrack?.artworkURL(size: .t500x500)
-            )
+            ScandiumTheme.bgPrimary.ignoresSafeArea()
 
-            // Current Tab Content (Properly constrained inside top Safe Area)
-            tabContentView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // All tabs stay alive so each keeps its navigation stack and
+            // scroll position while you switch between them.
+            tabStack(.home) {
+                DiscoverView(onNavigateToLibrary: { selectedTab = .library })
+            }
+            tabStack(.search) { SearchView() }
+            tabStack(.library) { LibraryView() }
+            tabStack(.profile) { ProfileView() }
 
             // Floating Mini Player & Bottom TabBar (Seamless at bottom Home Indicator)
             VStack(spacing: 0) {
@@ -109,27 +111,21 @@ struct MainContainerView: View {
             }
     }
 
-    // MARK: - Tab Content Switcher
+    // MARK: - Tab Stacks
 
-    @ViewBuilder
-    private var tabContentView: some View {
-        switch selectedTab {
-        case .home:
-            DiscoverView(
-                onNavigateToSearch: {
-                    selectedTab = .search
-                },
-                onNavigateToLibrary: {
-                    selectedTab = .library
-                }
-            )
-        case .search:
-            SearchView()
-        case .library:
-            LibraryView()
-        case .profile:
-            ProfileView()
+    /// Wraps a tab's root screen in its own navigation stack. Root screens
+    /// draw their own large header, so the bar only appears on pushed pages.
+    private func tabStack<Content: View>(_ tab: ScandiumTab, @ViewBuilder content: () -> Content) -> some View {
+        NavigationView {
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AmbientCanvasBackground(artworkURL: player.currentTrack?.artworkURL(size: .t500x500)))
+                .navigationBarHidden(true)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .opacity(selectedTab == tab ? 1 : 0)
+        .allowsHitTesting(selectedTab == tab)
+        .accessibilityHidden(selectedTab != tab)
     }
 
     // MARK: - Bottom TabBar (Seamless dark translucent with thin SF symbols)

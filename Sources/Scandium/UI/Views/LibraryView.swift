@@ -16,19 +16,19 @@ enum LibraryTab: Int, CaseIterable, Identifiable {
         switch self {
         case .liked:
             let count = library.likedTracks.count
-            return "\(settings.loc("Đã thích", "Liked")) (\(count))"
+            return "Liked (\(count))"
         case .playlists:
             let count = auth.userPlaylists.count
-            return "\(settings.loc("Danh sách phát", "Playlists")) (\(count))"
+            return "Playlists (\(count))"
         case .albums:
             let count = auth.userAlbums.count
-            return "\(settings.loc("Album", "Albums")) (\(count))"
+            return "Albums (\(count))"
         case .following:
             let count = auth.userFollowings.count
-            return "\(settings.loc("Đang theo dõi", "Following")) (\(count))"
+            return "Following (\(count))"
         case .recent:
             let count = library.recentlyPlayed.count
-            return "\(settings.loc("Gần đây", "Recent")) (\(count))"
+            return "Recent (\(count))"
         }
     }
 }
@@ -41,7 +41,6 @@ struct LibraryView: View {
     @ObservedObject private var settings = AppSettings.shared
 
     @State private var selectedTab: LibraryTab = .liked
-    @State private var selectedPlaylist: SoundCloudPlaylist?
 
     init() {}
 
@@ -54,36 +53,18 @@ struct LibraryView: View {
 
             contentView
         }
-        .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
-        .sheet(item: $selectedPlaylist) { playlist in
-            PlaylistDetailSheet(playlist: playlist)
-                .environmentObject(player)
-                .environmentObject(api)
-                .environmentObject(library)
-        }
     }
 
     // MARK: - Header
 
     private var headerView: some View {
         HStack {
-            Text(settings.loc("Thư viện", "Library"))
+            Text("Library")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundColor(ScandiumTheme.textPrimary)
 
             Spacer()
 
-            if auth.isAuthenticated {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 13))
-                        .foregroundColor(ScandiumTheme.spotifyGreen)
-                    Text(auth.currentUser?.username ?? settings.loc("Đã kết nối", "Connected"))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(ScandiumTheme.subtext)
-                        .lineLimit(1)
-                }
-            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -152,55 +133,20 @@ struct LibraryView: View {
         if library.likedTracks.isEmpty {
             emptyStateView(
                 icon: "heart.slash",
-                title: settings.loc("Chưa có bài hát yêu thích", "No liked songs yet"),
-                message: settings.loc("Nhấn nút hình trái tim trên bài hát bất kỳ để lưu vào thư viện.", "Tap the heart icon on any song to save it to your library.")
+                title: "No liked songs yet",
+                message: "Tap the heart icon on any song to save it to your library."
             )
         } else {
-            HStack(spacing: 12) {
-                Button(action: {
-                    player.playQueue(library.likedTracks, startingAt: 0)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 13))
-                        Text(settings.loc("Phát tất cả", "Play All"))
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(ScandiumTheme.spotifyGreen)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Button(action: {
-                    let shuffled = library.likedTracks.shuffled()
-                    player.playQueue(shuffled, startingAt: 0)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "shuffle")
-                            .font(.system(size: 13, weight: .bold))
-                        Text(settings.loc("Trộn bài", "Shuffle"))
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(ScandiumTheme.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
+            PlayShuffleButtons(tracks: library.likedTracks)
             .padding(.bottom, 6)
 
             LazyVStack(spacing: 4) {
-                ForEach(library.likedTracks) { track in
+                ForEach(Array(library.likedTracks.enumerated()), id: \.element.id) { index, track in
                     GlassTrackRow(
                         track: track,
                         isCurrentlyPlaying: player.currentTrack?.id == track.id,
                         onTap: {
-                            player.play(track: track)
+                            player.playQueue(library.likedTracks, startingAt: index)
                         }
                     )
                 }
@@ -215,14 +161,14 @@ struct LibraryView: View {
         if !auth.isAuthenticated {
             emptyStateView(
                 icon: "music.note.list",
-                title: settings.loc("Chưa đồng bộ tài khoản", "Account Not Synchronized"),
-                message: settings.loc("Đồng bộ tài khoản trong mục Cá nhân để tải danh sách phát của bạn.", "Synchronize account in Profile to load your playlists.")
+                title: "Account Not Synchronized",
+                message: "Synchronize account in Profile to load your playlists."
             )
         } else if auth.userPlaylists.isEmpty {
             emptyStateView(
                 icon: "music.note.list",
-                title: settings.loc("Không tìm thấy danh sách phát", "No playlists found"),
-                message: settings.loc("Kéo xuống để tải lại hoặc tạo danh sách phát mới trên tài khoản của bạn.", "Pull down to reload or create new playlists in your account.")
+                title: "No playlists found",
+                message: "Pull down to reload or create new playlists in your account."
             )
         } else {
             LazyVStack(spacing: 8) {
@@ -240,14 +186,14 @@ struct LibraryView: View {
         if !auth.isAuthenticated {
             emptyStateView(
                 icon: "opticaldisc",
-                title: settings.loc("Chưa đồng bộ tài khoản", "Account Not Synchronized"),
-                message: settings.loc("Đồng bộ tài khoản để duyệt album và EP của bạn.", "Synchronize account to browse your albums and EPs.")
+                title: "Account Not Synchronized",
+                message: "Synchronize account to browse your albums and EPs."
             )
         } else if auth.userAlbums.isEmpty {
             emptyStateView(
                 icon: "opticaldisc",
-                title: settings.loc("Không có album nào", "No albums found"),
-                message: settings.loc("Các album hoặc playlist có nhiều hơn 5 bài hát sẽ hiển thị tại đây.", "Albums or playlists with 5+ tracks will appear here.")
+                title: "No albums found",
+                message: "Albums or playlists with 5+ tracks will appear here."
             )
         } else {
             LazyVStack(spacing: 8) {
@@ -259,9 +205,7 @@ struct LibraryView: View {
     }
 
     private func playlistRow(playlist: SoundCloudPlaylist) -> some View {
-        Button(action: {
-            selectedPlaylist = playlist
-        }) {
+        NavigationLink(destination: TrackCollectionView(playlist: playlist)) {
             HStack(spacing: 12) {
                 CachedAsyncImage(
                     url: playlist.highResArtworkURL,
@@ -285,7 +229,7 @@ struct LibraryView: View {
                             .font(.system(size: 12))
                             .foregroundColor(ScandiumTheme.subtext)
 
-                        Text("\(playlist.trackCount ?? 0) \(settings.loc("bài hát", "tracks"))")
+                        Text("\(playlist.trackCount ?? 0) tracks")
                             .font(.system(size: 12))
                             .foregroundColor(ScandiumTheme.subtext)
                     }
@@ -313,18 +257,19 @@ struct LibraryView: View {
         if !auth.isAuthenticated {
             emptyStateView(
                 icon: "person.crop.circle.badge.plus",
-                title: settings.loc("Chưa đồng bộ tài khoản", "Account Not Synchronized"),
-                message: settings.loc("Đồng bộ tài khoản để xem danh sách nghệ sĩ bạn đang theo dõi.", "Synchronize account to see artists you are following.")
+                title: "Account Not Synchronized",
+                message: "Synchronize account to see artists you are following."
             )
         } else if auth.userFollowings.isEmpty {
             emptyStateView(
                 icon: "person.2",
-                title: settings.loc("Chưa theo dõi nghệ sĩ nào", "No followed artists"),
-                message: settings.loc("Kéo xuống để đồng bộ các nghệ sĩ bạn theo dõi.", "Pull down to sync artists you follow.")
+                title: "No followed artists",
+                message: "Pull down to sync artists you follow."
             )
         } else {
             LazyVStack(spacing: 8) {
                 ForEach(auth.userFollowings) { user in
+                    NavigationLink(destination: TrackCollectionView(user: user)) {
                     HStack(spacing: 12) {
                         CachedAsyncImage(
                             url: URL(string: user.avatarURL ?? ""),
@@ -348,18 +293,24 @@ struct LibraryView: View {
                             }
 
                             if let followers = user.followersCount {
-                                Text("\(followers) \(settings.loc("người theo dõi", "followers"))")
+                                Text("\(followers) followers")
                                     .font(.system(size: 12))
                                     .foregroundColor(ScandiumTheme.subtext)
                             }
                         }
 
                         Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(ScandiumTheme.subtext)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(ScandiumTheme.surfaceCard)
                     .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusMedium, style: .continuous))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
@@ -372,16 +323,16 @@ struct LibraryView: View {
         if library.recentlyPlayed.isEmpty {
             emptyStateView(
                 icon: "clock.arrow.circlepath",
-                title: settings.loc("Chưa có lịch sử nghe nhạc", "No listening history yet"),
-                message: settings.loc("Các bài hát bạn phát sẽ tự động xuất hiện ở đây.", "Tracks you play will automatically appear here.")
+                title: "No listening history yet",
+                message: "Tracks you play will automatically appear here."
             )
         } else {
             HStack {
-                Text(settings.loc("\(library.recentlyPlayed.count) bài đã nghe gần đây", "\(library.recentlyPlayed.count) recently played tracks"))
+                Text("\(library.recentlyPlayed.count) recently played tracks")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(ScandiumTheme.subtext)
                 Spacer()
-                Button(settings.loc("Dọn lịch sử", "Clear History")) {
+                Button("Clear History") {
                     library.clearRecentlyPlayed()
                 }
                 .font(.system(size: 12, weight: .semibold))
@@ -391,12 +342,12 @@ struct LibraryView: View {
             .padding(.bottom, 4)
 
             LazyVStack(spacing: 4) {
-                ForEach(library.recentlyPlayed) { track in
+                ForEach(Array(library.recentlyPlayed.enumerated()), id: \.element.id) { index, track in
                     GlassTrackRow(
                         track: track,
                         isCurrentlyPlaying: player.currentTrack?.id == track.id,
                         onTap: {
-                            player.play(track: track)
+                            player.playQueue(library.recentlyPlayed, startingAt: index)
                         }
                     )
                 }
@@ -425,164 +376,5 @@ struct LibraryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
-    }
-}
-
-// MARK: - Playlist Detail Sheet
-
-struct PlaylistDetailSheet: View {
-    let playlist: SoundCloudPlaylist
-    @EnvironmentObject var player: AudioPlayerEngine
-    @EnvironmentObject var api: SoundCloudAPI
-    @EnvironmentObject var library: LibraryManager
-    @ObservedObject private var settings = AppSettings.shared
-    @Environment(\.presentationMode) var presentationMode
-
-    @State private var loadedTracks: [Track]?
-    @State private var isLoading: Bool = true
-
-    init(playlist: SoundCloudPlaylist) {
-        self.playlist = playlist
-    }
-
-    private var displayTracks: [Track] {
-        loadedTracks ?? playlist.tracks ?? []
-    }
-
-    var body: some View {
-        NavigationView {
-            ZStack {
-                ScandiumTheme.bgPrimary.ignoresSafeArea()
-
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        // Artwork & Metadata
-                        HStack(spacing: 16) {
-                            CachedAsyncImage(
-                                url: playlist.highResArtworkURL,
-                                width: 110,
-                                height: 110,
-                                cornerRadius: 10
-                            )
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(playlist.title)
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(ScandiumTheme.textPrimary)
-                                    .lineLimit(2)
-
-                                Text(playlist.user?.username ?? "SoundCloud")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(ScandiumTheme.subtext)
-
-                                Text("\(displayTracks.count) \(settings.loc("bài hát", "tracks"))")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(ScandiumTheme.subtext)
-                            }
-                        }
-                        .padding(.top, 10)
-
-                        // Action buttons
-                        if !displayTracks.isEmpty {
-                            HStack(spacing: 12) {
-                                Button(action: {
-                                    player.playQueue(displayTracks, startingAt: 0)
-                                    presentationMode.wrappedValue.dismiss()
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "play.fill")
-                                            .font(.system(size: 14))
-                                        Text(settings.loc("Phát tất cả", "Play All"))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 40)
-                                    .background(ScandiumTheme.spotifyGreen)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                }
-                                .buttonStyle(PlainButtonStyle())
-
-                                Button(action: {
-                                    let shuffled = displayTracks.shuffled()
-                                    player.playQueue(shuffled, startingAt: 0)
-                                    presentationMode.wrappedValue.dismiss()
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "shuffle")
-                                            .font(.system(size: 14, weight: .bold))
-                                        Text(settings.loc("Trộn bài", "Shuffle"))
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                    .foregroundColor(ScandiumTheme.textPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 40)
-                                    .background(ScandiumTheme.surfaceElevated)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-
-                        if isLoading && displayTracks.isEmpty {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.spotifyGreen))
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 30)
-                        } else {
-                            LazyVStack(spacing: 4) {
-                                ForEach(displayTracks) { track in
-                                    GlassTrackRow(
-                                        track: track,
-                                        isCurrentlyPlaying: player.currentTrack?.id == track.id,
-                                        onTap: {
-                                            player.playQueue(displayTracks, startingAt: displayTracks.firstIndex(of: track) ?? 0)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
-                }
-            }
-            .navigationTitle(playlist.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(settings.loc("Đóng", "Close")) {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(ScandiumTheme.spotifyGreen)
-                }
-            }
-        }
-        .onAppear {
-            loadTracks()
-        }
-    }
-
-    private func loadTracks() {
-        // Playlists from the list only embed their first few tracks, so always
-        // fetch the full track list unless every track is already here.
-        if let tracks = playlist.tracks, let count = playlist.trackCount, tracks.count >= count {
-            isLoading = false
-            return
-        }
-
-        Task {
-            do {
-                let tracks = try await api.getPlaylistTracks(playlistID: playlist.id, oauthToken: SoundCloudAuthManager.shared.oauthToken)
-                await MainActor.run {
-                    self.loadedTracks = tracks
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
-            }
-        }
     }
 }
