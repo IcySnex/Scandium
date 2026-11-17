@@ -438,7 +438,7 @@ struct PlaylistDetailSheet: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.presentationMode) var presentationMode
 
-    @State private var detailedPlaylist: SoundCloudPlaylist?
+    @State private var loadedTracks: [Track]?
     @State private var isLoading: Bool = true
 
     init(playlist: SoundCloudPlaylist) {
@@ -446,7 +446,7 @@ struct PlaylistDetailSheet: View {
     }
 
     private var displayTracks: [Track] {
-        detailedPlaylist?.tracks ?? playlist.tracks ?? []
+        loadedTracks ?? playlist.tracks ?? []
     }
 
     var body: some View {
@@ -564,16 +564,18 @@ struct PlaylistDetailSheet: View {
     }
 
     private func loadTracks() {
-        if playlist.tracks != nil && !(playlist.tracks?.isEmpty ?? true) {
+        // Playlists from the list only embed their first few tracks, so always
+        // fetch the full track list unless every track is already here.
+        if let tracks = playlist.tracks, let count = playlist.trackCount, tracks.count >= count {
             isLoading = false
             return
         }
 
         Task {
             do {
-                let full = try await api.getPlaylist(id: playlist.id, oauthToken: SoundCloudAuthManager.shared.oauthToken)
+                let tracks = try await api.getPlaylistTracks(playlistID: playlist.id, oauthToken: SoundCloudAuthManager.shared.oauthToken)
                 await MainActor.run {
-                    self.detailedPlaylist = full
+                    self.loadedTracks = tracks
                     self.isLoading = false
                 }
             } catch {

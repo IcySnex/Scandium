@@ -204,6 +204,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
         self.cornerRadius = cornerRadius
         self.contentMode = contentMode
         self.placeholder = placeholder
+        // Start with the in-memory image so recreated views (e.g. after a tab
+        // switch) don't flash the placeholder for a frame.
+        self._loadedImage = State(initialValue: url.flatMap { ImageCacheStore.shared.memoryImage(for: $0) })
     }
 
     var body: some View {
@@ -335,6 +338,11 @@ final class ImageCacheStore {
         let raw = url.absoluteString
         let hash = raw.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) }
         return "img_\(abs(hash)).jpg"
+    }
+
+    /// Memory-only lookup, cheap enough to call while building a view.
+    func memoryImage(for url: URL) -> UIImage? {
+        memoryCache.object(forKey: url.absoluteString as NSString)
     }
 
     func get(for url: URL) -> UIImage? {

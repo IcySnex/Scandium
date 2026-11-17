@@ -1,5 +1,10 @@
-// DiscoverView.swift — Spotify-style clean Home & Music screen
+// DiscoverView.swift — Home screen built from SoundCloud's personalized sections
 // Project: Scandium | Author: MeoHunter | License: GPL-3.0
+//
+// Mirrors soundcloud.com's home: the sections come from /mixed-selections
+// ("Made for you", "Recently Played", "More of what you like", mixes,
+// stations, ...). The feed loads once per launch; it only reloads when the
+// reload button is tapped or the page is pulled down.
 
 import SwiftUI
 
@@ -15,6 +20,9 @@ struct DiscoverView: View {
     @ObservedObject private var store = DiscoverDataStore.shared
     @ObservedObject private var settings = AppSettings.shared
     @State private var showClientIDSheet: Bool = false
+    @State private var openedItem: HomeItem?
+
+    private static let cardSize: CGFloat = 148
 
     init(
         onNavigateToSearch: @escaping () -> Void = {},
@@ -24,107 +32,79 @@ struct DiscoverView: View {
         self.onNavigateToLibrary = onNavigateToLibrary
     }
 
-    private var emptyQuickCard: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 0, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 56, height: 56)
-            Text(settings.loc("Chưa tải được dữ liệu", "Unable to load data"))
-                .font(.system(size: 12))
-                .foregroundColor(ScandiumTheme.subtext)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.trailing, 8)
-        }
-        .frame(height: 56)
-        .background(ScandiumTheme.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusSmall, style: .continuous))
-    }
-
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 22) {
-                // Header (Under Safe Area)
+            VStack(alignment: .leading, spacing: 24) {
                 headerView
                     .padding(.top, 8)
+
+                likedSongsCard
 
                 if let error = store.error {
                     homeErrorBanner(error)
                 }
 
-                // 2-Column Quick Picks Grid (Spotify style: 56pt height, #181818)
-                quickPicksSection
-
-                // Personalized Carousel (Gợi ý cá nhân theo tài khoản / Client ID / Thư viện)
-                if !store.personalizedTracks.isEmpty || store.isLoading {
-                    carouselSection(
-                        title: store.personalizedTitle,
-                        subtitle: store.personalizedSubtitle,
-                        tracks: store.personalizedTracks
-                    )
+                if store.selections.isEmpty && store.isLoading {
+                    ForEach(0..<3, id: \.self) { _ in shimmerSection }
+                } else {
+                    ForEach(store.selections) { selection in
+                        selectionSection(selection)
+                    }
                 }
-
-                // Horizontal Carousel: Thịnh hành (Trending)
-                carouselSection(
-                    title: settings.loc("Thịnh hành", "Global Trending"),
-                    tracks: store.trendingTracks
-                )
-
-                // Horizontal Carousel: Chill & R&B
-                carouselSection(
-                    title: settings.loc("Chill & R&B", "Chill & R&B"),
-                    tracks: store.chillTracks
-                )
-
-                // Horizontal Carousel: Remix & EDM
-                carouselSection(
-                    title: settings.loc("Remix sôi động", "Remix & Dance"),
-                    tracks: store.remixTracks
-                )
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 130) // Ensure content is never hidden behind floating player & tab bar
+            .padding(.bottom, 130) // Keep content clear of the mini player & tab bar
         }
         .refreshable {
-            await store.refresh(api: api)
+            await store.reload(api: api)
         }
         .sheet(isPresented: $showClientIDSheet) {
             ClientIDConfigModal(scraper: scraper)
         }
-        .onAppear {
-            store.loadInitialData(api: api)
+        .sheet(item: $openedItem) { item in
+            HomeItemDetailSheet(item: item)
+                .environmentObject(api)
+                .environmentObject(player)
+                .environmentObject(library)
+        }
+        .task {
+            await store.loadIfNeeded(api: api)
         }
     }
 
-    // MARK: - Header View
+    // MARK: - Header
 
     private var headerView: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Scandium")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-            }
+            Text(settings.loc("Trang chủ", "Home"))
+                .font(.system(size: 26, weight: .bold))
+                .foregroundColor(ScandiumTheme.textPrimary)
 
             Spacer()
 
             HStack(spacing: 10) {
-                // Refresh / Reload Button
+                // Reload: refetches the home feed and re-syncs likes & playlists
                 Button(action: {
-                    Task {
-                        await store.refresh(api: api)
-                    }
+                    Task { await store.reload(api: api) }
                 }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(ScandiumTheme.textPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(ScandiumTheme.surfaceElevated)
-                        .clipShape(Circle())
+                    Group {
+                        if store.isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.textPrimary))
+                                .scaleEffect(0.75)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(ScandiumTheme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(ScandiumTheme.surfaceElevated)
+                    .clipShape(Circle())
                 }
                 .buttonStyle(PlainButtonStyle())
+                .disabled(store.isLoading)
 
-                // Search Shortcut
                 Button(action: onNavigateToSearch) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 16, weight: .medium))
@@ -135,13 +115,11 @@ struct DiscoverView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // Status & Config Pill
                 Button(action: { showClientIDSheet = true }) {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(scraper.lastError == nil ? ScandiumTheme.spotifyGreen : Color.orange)
                             .frame(width: 7, height: 7)
-
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(ScandiumTheme.textPrimary.opacity(0.85))
@@ -156,47 +134,14 @@ struct DiscoverView: View {
         }
     }
 
-    // MARK: - 2-Column Quick Picks Grid (Spotify Style)
+    // MARK: - Liked Songs
 
-    private var quickPicksSection: some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 8),
-            GridItem(.flexible(), spacing: 8)
-        ]
-
-        return LazyVGrid(columns: columns, spacing: 8) {
-            // Card 1: Liked Songs (Classic Spotify Favorite)
-            likedSongsQuickCard
-
-            // Cards 2-6: Dynamic quick-pick tracks
-            if store.quickPicks.isEmpty {
-                if store.isLoading {
-                    ForEach(0..<5, id: \.self) { _ in
-                        shimmerQuickCard
-                    }
-                } else {
-                    ForEach(0..<5, id: \.self) { _ in
-                        emptyQuickCard
-                    }
-                }
-            } else {
-                ForEach(Array(store.quickPicks.prefix(5).enumerated()), id: \.offset) { _, track in
-                    quickPickCard(track: track)
-                }
-            }
-        }
-    }
-
-    private var likedSongsQuickCard: some View {
+    private var likedSongsCard: some View {
         Button(action: onNavigateToLibrary) {
-            HStack(spacing: 8) {
-                // Left 56x56 gradient artwork with heart
+            HStack(spacing: 12) {
                 ZStack {
                     LinearGradient(
-                        colors: [
-                            Color(red: 0.28, green: 0.15, blue: 0.65),
-                            Color(red: 0.55, green: 0.35, blue: 0.85)
-                        ],
+                        colors: [Color(red: 1.0, green: 0.33, blue: 0.0), Color(red: 1.0, green: 0.55, blue: 0.2)],
                         startPoint: .bottomLeading,
                         endPoint: .topTrailing
                     )
@@ -205,172 +150,121 @@ struct DiscoverView: View {
                         .foregroundColor(.white)
                 }
                 .frame(width: 56, height: 56)
-                .clipped()
 
-                Text(settings.loc("Bài hát đã thích", "Liked Songs"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 56)
-            .background(ScandiumTheme.surfaceCard)
-            .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusSmall, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private func quickPickCard(track: Track) -> some View {
-        Button(action: {
-            player.play(track: track)
-        }) {
-            HStack(spacing: 8) {
-                CachedAsyncImage(
-                    url: track.artworkURL(size: .t120x120) ?? track.artworkImageURL,
-                    width: 56,
-                    height: 56,
-                    cornerRadius: 0
-                )
-
-                Text(track.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(player.currentTrack?.id == track.id ? ScandiumTheme.spotifyGreen : ScandiumTheme.textPrimary)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 56)
-            .background(ScandiumTheme.surfaceCard)
-            .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusSmall, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var shimmerQuickCard: some View {
-        HStack(spacing: 8) {
-            ShimmerView()
-                .frame(width: 56, height: 56)
-
-            VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 12)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.04))
-                    .frame(width: 60, height: 10)
-            }
-            .padding(.trailing, 8)
-        }
-        .frame(height: 56)
-        .background(ScandiumTheme.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusSmall, style: .continuous))
-    }
-
-    // MARK: - Horizontal Carousel Section (148x148 square cards)
-
-    private func carouselSection(title: String, subtitle: String? = nil, tracks: [Track]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                if let sub = subtitle, !sub.isEmpty {
-                    Text(sub)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(settings.loc("Bài hát đã thích", "Liked Songs"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(ScandiumTheme.textPrimary)
+                    Text("\(library.likedTracks.count) \(settings.loc("bài hát", "tracks"))")
                         .font(.system(size: 12))
                         .foregroundColor(ScandiumTheme.subtext)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(ScandiumTheme.subtext)
+                    .padding(.trailing, 12)
+            }
+            .background(ScandiumTheme.surfaceCard)
+            .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusSmall, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Sections
+
+    private func selectionSection(_ selection: HomeSelection) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selection.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(ScandiumTheme.textPrimary)
+                if let description = selection.description, !description.isEmpty {
+                    Text(description)
+                        .font(.system(size: 12))
+                        .foregroundColor(ScandiumTheme.subtext)
+                        .lineLimit(2)
                 }
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
-                    if tracks.isEmpty {
-                        if store.isLoading {
-                            ForEach(0..<4, id: \.self) { _ in
-                                shimmerCarouselCard
-                            }
-                        } else {
-                            ForEach(0..<2, id: \.self) { _ in
-                                emptyCarouselCard
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(selection.items) { item in
+                        Button(action: { openedItem = item }) {
+                            switch item {
+                            case .playlist(let playlist): playlistCard(playlist)
+                            case .user(let user): userCard(user)
                             }
                         }
-                    } else {
-                        ForEach(Array(tracks.enumerated()), id: \.offset) { _, track in
-                            carouselCard(track: track)
-                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
             }
         }
     }
 
-    private func carouselCard(track: Track) -> some View {
-        Button(action: {
-            player.play(track: track)
-        }) {
-            VStack(alignment: .leading, spacing: 6) {
-                // Square 148x148 Artwork, 8pt corner radius, strictly clipped
-                CachedAsyncImage(
-                    url: track.highResArtworkURL ?? track.artworkImageURL,
-                    width: 148,
-                    height: 148,
-                    cornerRadius: 8
-                )
-
-                // Track title (white, bold)
-                Text(track.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(player.currentTrack?.id == track.id ? ScandiumTheme.spotifyGreen : ScandiumTheme.textPrimary)
-                    .lineLimit(1)
-                    .frame(width: 148, alignment: .leading)
-
-                // Artist name (gray #A7A7A7)
-                Text(track.user?.username ?? "SoundCloud")
-                    .font(.system(size: 12, weight: .regular))
+    private func playlistCard(_ playlist: HomePlaylist) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CachedAsyncImage(
+                url: playlist.highResArtworkURL,
+                width: Self.cardSize,
+                height: Self.cardSize,
+                cornerRadius: 8
+            )
+            Text(playlist.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(ScandiumTheme.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            if !playlist.isSystemPlaylist, let username = playlist.user?.username {
+                Text(username)
+                    .font(.system(size: 12))
                     .foregroundColor(ScandiumTheme.subtext)
                     .lineLimit(1)
-                    .frame(width: 148, alignment: .leading)
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .frame(width: Self.cardSize, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
-    private var shimmerCarouselCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ShimmerView()
-                .frame(width: 148, height: 148)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    private func userCard(_ user: SoundCloudUser) -> some View {
+        VStack(spacing: 6) {
+            CachedAsyncImage(
+                url: user.avatarURL.flatMap { URL(string: Track.upgradeArtwork(urlString: $0, to: .t500x500)) },
+                width: Self.cardSize,
+                height: Self.cardSize,
+                cornerRadius: Self.cardSize / 2
+            )
+            Text(user.username)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(ScandiumTheme.textPrimary)
+                .lineLimit(1)
+            if let followers = user.followersCount {
+                Text("\(followers) \(settings.loc("người theo dõi", "followers"))")
+                    .font(.system(size: 12))
+                    .foregroundColor(ScandiumTheme.subtext)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: Self.cardSize)
+        .contentShape(Rectangle())
+    }
 
-            RoundedRectangle(cornerRadius: 3)
+    private var shimmerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: 4)
                 .fill(Color.white.opacity(0.08))
-                .frame(width: 120, height: 12)
-
-            RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 80, height: 10)
+                .frame(width: 160, height: 18)
+            HStack(spacing: 14) {
+                ForEach(0..<3, id: \.self) { _ in
+                    ShimmerView()
+                        .frame(width: Self.cardSize, height: Self.cardSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
         }
-        .frame(width: 148)
     }
-
-    private var emptyCarouselCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 148, height: 148)
-            Text(settings.loc("Chưa có dữ liệu", "No data available"))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(ScandiumTheme.subtext)
-                .lineLimit(1)
-            Text(settings.loc("Kéo xuống hoặc bấm thử lại", "Pull down or tap retry"))
-                .font(.system(size: 11))
-                .foregroundColor(ScandiumTheme.subtext.opacity(0.8))
-                .lineLimit(1)
-        }
-        .frame(width: 148)
-    }
-
-    // MARK: - Data Loading
 
     private func homeErrorBanner(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -380,7 +274,7 @@ struct DiscoverView: View {
                 .lineLimit(nil)
 
             Button(action: {
-                store.loadInitialData(api: api, force: true)
+                Task { await store.reload(api: api) }
             }) {
                 Text(settings.loc("Thử tải lại", "Retry"))
                     .font(.system(size: 12, weight: .semibold))
@@ -399,297 +293,238 @@ struct DiscoverView: View {
     }
 }
 
-// MARK: - Discover Data Store (Persistent across tab switches)
+// MARK: - Playlist / Artist Detail Sheet
+
+/// Shows the tracks behind a home card: every track of a playlist or mix, or
+/// an artist's uploads.
+struct HomeItemDetailSheet: View {
+    let item: HomeItem
+
+    @EnvironmentObject var api: SoundCloudAPI
+    @EnvironmentObject var player: AudioPlayerEngine
+    @EnvironmentObject var library: LibraryManager
+    @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.presentationMode) var presentationMode
+
+    @State private var tracks: [Track] = []
+    @State private var isLoading = true
+    @State private var loadError: String?
+
+    private var title: String {
+        switch item {
+        case .playlist(let playlist): return playlist.title
+        case .user(let user): return user.username
+        }
+    }
+
+    private var subtitle: String? {
+        switch item {
+        case .playlist(let playlist):
+            return playlist.isSystemPlaylist ? playlist.description : playlist.user?.username
+        case .user(let user):
+            return user.fullName
+        }
+    }
+
+    private var artworkURL: URL? {
+        switch item {
+        case .playlist(let playlist): return playlist.highResArtworkURL
+        case .user(let user): return user.avatarURL.flatMap { URL(string: Track.upgradeArtwork(urlString: $0, to: .t500x500)) }
+        }
+    }
+
+    private var isUser: Bool {
+        if case .user = item { return true }
+        return false
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                ScandiumTheme.bgPrimary.ignoresSafeArea()
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 16) {
+                            CachedAsyncImage(url: artworkURL, width: 110, height: 110, cornerRadius: isUser ? 55 : 10)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(title)
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(ScandiumTheme.textPrimary)
+                                    .lineLimit(2)
+                                if let subtitle = subtitle, !subtitle.isEmpty {
+                                    Text(subtitle)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(ScandiumTheme.subtext)
+                                        .lineLimit(3)
+                                }
+                                if !isLoading {
+                                    Text("\(tracks.count) \(settings.loc("bài hát", "tracks"))")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(ScandiumTheme.subtext)
+                                }
+                            }
+                        }
+                        .padding(.top, 10)
+
+                        if !tracks.isEmpty {
+                            HStack(spacing: 12) {
+                                actionButton(icon: "play.fill", title: settings.loc("Phát tất cả", "Play All"), primary: true) {
+                                    player.playQueue(tracks, startingAt: 0)
+                                    presentationMode.wrappedValue.dismiss()
+                                }
+                                actionButton(icon: "shuffle", title: settings.loc("Trộn bài", "Shuffle"), primary: false) {
+                                    player.playQueue(tracks.shuffled(), startingAt: 0)
+                                    presentationMode.wrappedValue.dismiss()
+                                }
+                            }
+                        }
+
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.spotifyGreen))
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 30)
+                        } else if let loadError = loadError {
+                            Text(loadError)
+                                .font(.system(size: 13))
+                                .foregroundColor(ScandiumTheme.subtext)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 30)
+                        } else {
+                            LazyVStack(spacing: 4) {
+                                ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                                    GlassTrackRow(
+                                        track: track,
+                                        isCurrentlyPlaying: player.currentTrack?.id == track.id,
+                                        onTap: { player.playQueue(tracks, startingAt: index) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(settings.loc("Đóng", "Close")) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(ScandiumTheme.spotifyGreen)
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func actionButton(icon: String, title: String, primary: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 14, weight: .bold))
+                Text(title).font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(primary ? .white : ScandiumTheme.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .background(primary ? ScandiumTheme.spotifyGreen : ScandiumTheme.surfaceElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @MainActor
+    private func load() async {
+        guard isLoading else { return }
+        let token = SoundCloudAuthManager.shared.oauthToken
+        do {
+            switch item {
+            case .playlist(let playlist):
+                // Show the embedded first tracks right away, then the full list
+                if !playlist.tracks.isEmpty { tracks = playlist.tracks }
+                tracks = try await api.getPlaylistTracks(playlist, oauthToken: token)
+            case .user(let user):
+                tracks = try await api.getUserTracks(userID: user.id, oauthToken: token)
+            }
+        } catch {
+            if tracks.isEmpty {
+                loadError = settings.loc("Không tải được bài hát.", "Couldn't load tracks.")
+            }
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Discover Data Store (persists across tab switches)
 
 final class DiscoverDataStore: ObservableObject {
     static let shared = DiscoverDataStore()
 
-    @Published var quickPicks: [Track] = []
-    @Published var personalizedTracks: [Track] = []
-    @Published var personalizedTitle: String = "Made for You"
-    @Published var personalizedSubtitle: String? = nil
-    @Published var trendingTracks: [Track] = []
-    @Published var chillTracks: [Track] = []
-    @Published var remixTracks: [Track] = []
-    @Published var isLoading: Bool = false
-    @Published var isRefreshing: Bool = false
+    @Published private(set) var selections: [HomeSelection] = []
+    @Published private(set) var isLoading: Bool = false
     @Published var error: String?
 
-    private var hasLoaded: Bool = false
-    private let cacheKey = "scandium_discover_cached_payload_v1"
+    /// The feed is fetched once per launch; afterwards only `reload` refetches.
+    private var didLoadThisLaunch = false
 
-    private struct DiscoverCachePayload: Codable {
-        let quickPicks: [Track]
-        let personalizedTracks: [Track]
-        let personalizedTitle: String
-        let personalizedSubtitle: String?
-        let trendingTracks: [Track]
-        let chillTracks: [Track]
-        let remixTracks: [Track]
+    private static var cacheFile: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("scandium_home_mixed_selections.json")
     }
 
     private init() {
-        loadCachedFeed()
-    }
+        // Old search-based feed cache, no longer used
+        UserDefaults.standard.removeObject(forKey: "scandium_discover_cached_payload_v1")
 
-    private func loadCachedFeed() {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey),
-              let payload = try? JSONDecoder().decode(DiscoverCachePayload.self, from: data) else {
-            return
-        }
-        self.quickPicks = payload.quickPicks
-        self.personalizedTracks = payload.personalizedTracks
-        self.personalizedTitle = payload.personalizedTitle
-        self.personalizedSubtitle = payload.personalizedSubtitle
-        self.trendingTracks = payload.trendingTracks
-        self.chillTracks = payload.chillTracks
-        self.remixTracks = payload.remixTracks
-        self.hasLoaded = true
-    }
-
-    private func saveCachedFeed() {
-        let payload = DiscoverCachePayload(
-            quickPicks: quickPicks,
-            personalizedTracks: personalizedTracks,
-            personalizedTitle: personalizedTitle,
-            personalizedSubtitle: personalizedSubtitle,
-            trendingTracks: trendingTracks,
-            chillTracks: chillTracks,
-            remixTracks: remixTracks
-        )
-        if let data = try? JSONEncoder().encode(payload) {
-            UserDefaults.standard.set(data, forKey: cacheKey)
+        if let file = Self.cacheFile,
+           let data = try? Data(contentsOf: file),
+           let cached = try? SoundCloudAPI.decodeSelections(data) {
+            selections = cached
         }
     }
 
-    func refresh(api: SoundCloudAPI) async {
-        await MainActor.run {
-            self.isRefreshing = true
-        }
-        await loadData(api: api, force: true)
-        await MainActor.run {
-            self.isRefreshing = false
-        }
+    @MainActor
+    func loadIfNeeded(api: SoundCloudAPI) async {
+        guard !didLoadThisLaunch else { return }
+        didLoadThisLaunch = true
+        await fetchFeed(api: api)
     }
 
-    func loadInitialData(api: SoundCloudAPI, force: Bool = false) {
-        // If already loading, avoid duplicate triggers
-        if isLoading && !force {
-            return
-        }
-
-        Task {
-            await loadData(api: api, force: force)
-        }
+    /// Refetches the home feed and re-syncs the library (likes & playlists).
+    @MainActor
+    func reload(api: SoundCloudAPI) async {
+        guard !isLoading else { return }
+        didLoadThisLaunch = true
+        async let feed: Void = fetchFeed(api: api)
+        async let library: Void = SoundCloudAuthManager.shared.syncLibrary()
+        _ = await (feed, library)
     }
 
-    private func loadData(api: SoundCloudAPI, force: Bool) async {
-        await MainActor.run {
-            // Only set fullscreen shimmer if we have no cached content to show
-            if self.quickPicks.isEmpty && self.trendingTracks.isEmpty {
-                self.isLoading = true
+    @MainActor
+    private func fetchFeed(api: SoundCloudAPI) async {
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+
+        do {
+            let data = try await api.getMixedSelectionsData(oauthToken: SoundCloudAuthManager.shared.oauthToken)
+            let fresh = try SoundCloudAPI.decodeSelections(data)
+            guard !fresh.isEmpty else { throw APIError.invalidResponse }
+            selections = fresh
+            if let file = Self.cacheFile {
+                try? data.write(to: file, options: .atomic)
             }
-            self.error = nil
-        }
-
-        let auth = SoundCloudAuthManager.shared
-        let library = LibraryManager.shared
-
-        async let persTask = fetchPersonalizedTracks(api: api, auth: auth, library: library, force: force)
-        async let qpTask = fetchQuickPicks(api: api, auth: auth, library: library, force: force)
-
-        let isEn = AppSettings.shared.language == .english
-        let trendingQuery = isEn ? "Global Top Hits" : "Top Vietnam"
-        let trendingOffset = force ? Int.random(in: 0...5) : 0
-        let chillOffset = force ? Int.random(in: 0...5) : 0
-        let remixOffset = force ? Int.random(in: 0...5) : 0
-
-        async let trTask = safeSearch(api: api, query: trendingQuery, limit: 10, offset: trendingOffset)
-        async let chTask = safeSearch(api: api, query: isEn ? "Chill Vibes & R&B" : "Chill R&B", limit: 10, offset: chillOffset)
-        async let rmTask = safeSearch(api: api, query: isEn ? "EDM Festival Hits" : "Remix Lo-Fi", limit: 10, offset: remixOffset)
-
-        let (persResult, qpTracks, trTracks, chTracks, rmTracks) = await (persTask, qpTask, trTask, chTask, rmTask)
-
-        await MainActor.run {
-            self.personalizedTracks = self.deduplicateTracks(persResult.tracks)
-            self.personalizedTitle = persResult.title
-            self.personalizedSubtitle = persResult.subtitle
-
-            if !qpTracks.isEmpty { self.quickPicks = self.deduplicateTracks(qpTracks) }
-            if !trTracks.isEmpty { self.trendingTracks = self.deduplicateTracks(trTracks) }
-            if !chTracks.isEmpty { self.chillTracks = self.deduplicateTracks(chTracks) }
-            if !rmTracks.isEmpty { self.remixTracks = self.deduplicateTracks(rmTracks) }
-
-            self.isLoading = false
-            self.hasLoaded = true
-            self.saveCachedFeed()
-
-            if self.quickPicks.isEmpty && self.trendingTracks.isEmpty && self.personalizedTracks.isEmpty {
+        } catch {
+            if selections.isEmpty {
                 self.error = AppSettings.shared.loc(
-                    "Không tải được dữ liệu âm nhạc. Hãy thử lại hoặc kiểm tra cấu hình mạng.",
-                    "Unable to load music data. Please try again or check network config."
+                    "Không tải được trang chủ. Hãy đăng nhập SoundCloud hoặc thử lại.",
+                    "Couldn't load your home feed. Sign in to SoundCloud or try again."
                 )
             }
         }
-    }
-
-    private func fetchQuickPicks(api: SoundCloudAPI, auth: SoundCloudAuthManager, library: LibraryManager, force: Bool) async -> [Track] {
-        var candidatePicks: [Track] = []
-        var seenIDs = Set<Int>()
-
-        let userSeeds = (auth.userLikedTracks + library.likedTracks + library.recentlyPlayed).shuffled()
-        for track in userSeeds {
-            if seenIDs.insert(track.id).inserted {
-                candidatePicks.append(track)
-                if candidatePicks.count >= 3 { break }
-            }
-        }
-
-        let isEn = AppSettings.shared.language == .english
-        let queryPool = (isEn ? [
-            "Top Hits",
-            "Top Trending",
-            "EDM Festival",
-            "Acoustic Chill",
-            "Lo-Fi Beats",
-            "Indie Pop",
-            "Chill R&B",
-            "Deep House"
-        ] : [
-            "V-Pop Hits",
-            "Top Trending",
-            "EDM Festival",
-            "Acoustic Chill",
-            "Nhạc Trẻ Remix",
-            "Indie Việt",
-            "Chill R&B",
-            "Deep House"
-        ]).shuffled()
-
-        for q in queryPool.prefix(2) {
-            let offset = force ? Int.random(in: 0...10) : 0
-            let fetched = await safeSearch(api: api, query: q, limit: 6, offset: offset)
-            for track in fetched {
-                if seenIDs.insert(track.id).inserted {
-                    candidatePicks.append(track)
-                }
-            }
-        }
-
-        if candidatePicks.isEmpty {
-            let fallback = await safeSearch(api: api, query: "Top Hits", limit: 6, offset: 0)
-            return fallback
-        }
-
-        return Array(candidatePicks.prefix(6))
-    }
-
-    private func fetchPersonalizedTracks(api: SoundCloudAPI, auth: SoundCloudAuthManager, library: LibraryManager, force: Bool) async -> (title: String, subtitle: String?, tracks: [Track]) {
-        let isEn = AppSettings.shared.language == .english
-
-        // Priority 1: User is logged in to SoundCloud with OAuth
-        if auth.isAuthenticated {
-            if let token = auth.oauthToken, !token.isEmpty {
-                do {
-                    let stream = try await api.getUserStream(oauthToken: token, limit: 12)
-                    if !stream.isEmpty {
-                        let username = auth.currentUser?.username ?? (isEn ? "you" : "bạn")
-                        let title = isEn ? "Feed for \(username)" : "Bảng tin của \(username)"
-                        let subtitle = isEn ? "New tracks from artists you follow" : "Bài hát mới từ nghệ sĩ bạn theo dõi"
-                        return (title, subtitle, stream)
-                    }
-                } catch {
-                    // Fall back to liked tracks
-                }
-            }
-
-            if let seed = auth.userLikedTracks.randomElement() {
-                do {
-                    let related = try await api.getRelatedTracks(trackID: seed.id, limit: 12)
-                    if !related.isEmpty {
-                        let title = isEn ? "Related Recommendations" : "Gợi ý liên quan"
-                        let subtitle = isEn ? "Based on '\(seed.title)' you liked" : "Dựa trên '\(seed.title)' bạn đã thích"
-                        return (title, subtitle, related)
-                    }
-                } catch {}
-            }
-        }
-
-        // Priority 1.5: If user has followed artists, discover songs by their followed artists
-        if auth.isAuthenticated, !auth.userFollowings.isEmpty {
-            if let randomArtist = auth.userFollowings.randomElement() {
-                let artistTracks = await safeSearch(api: api, query: randomArtist.username, limit: 12, offset: 0)
-                if !artistTracks.isEmpty {
-                    let title = isEn ? "From Artists You Follow" : "Từ nghệ sĩ bạn theo dõi"
-                    let subtitle = isEn ? "Top tracks from \(randomArtist.username)" : "Các bài hát nổi bật của \(randomArtist.username)"
-                    return (title, subtitle, artistTracks)
-                }
-            }
-        }
-
-        // Priority 2: In-app liked songs
-        if let seed = library.likedTracks.randomElement() {
-            do {
-                let related = try await api.getRelatedTracks(trackID: seed.id, limit: 12)
-                if !related.isEmpty {
-                    let title = isEn ? "Made for You" : "Dành riêng cho bạn"
-                    let subtitle = isEn ? "Inspired by '\(seed.title)'" : "Lấy cảm hứng từ bài '\(seed.title)'"
-                    return (title, subtitle, related)
-                }
-            } catch {}
-        }
-
-        // Priority 3: Recently played songs in history
-        if let seed = library.recentlyPlayed.first {
-            do {
-                let related = try await api.getRelatedTracks(trackID: seed.id, limit: 12)
-                if !related.isEmpty {
-                    let title = isEn ? "Keep Listening" : "Tiếp tục nghe theo gu của bạn"
-                    let subtitle = isEn ? "Suggestions from '\(seed.title)'" : "Gợi ý từ bài '\(seed.title)'"
-                    return (title, subtitle, related)
-                }
-            } catch {}
-        }
-
-        let dynamicQueries: [(String, String)] = isEn ? [
-            ("Today's Top Hits", "Trending music around the globe"),
-            ("Acoustic Chill", "Laid-back acoustic melodies"),
-            ("Electronic & Dance", "High-energy beats and rhythm"),
-            ("Lo-Fi Study Beats", "Smooth beats to focus and relax"),
-            ("Indie Discoveries", "Fresh independent sounds")
-        ] : [
-            ("V-Pop Hot Hits", "Tuyển tập nhạc Việt thịnh hành"),
-            ("Acoustic Chill", "Giai điệu mộc mạc thư giãn"),
-            ("Deep Electronic & EDM", "Sôi động với năng lượng cao"),
-            ("Lo-Fi Study Beats", "Tập trung và làm việc hiệu quả"),
-            ("Indie Vibes", "Những thanh âm indie độc đáo")
-        ]
-        let defaultChoice = isEn ? ("Discover Weekly", "Curated weekly picks") : ("Khám phá hàng tuần", "Tuyển tập được chọn lọc")
-        let chosen = dynamicQueries.randomElement() ?? defaultChoice
-        let randomOffset = force ? Int.random(in: 0...4) : 0
-        let tracks = await safeSearch(api: api, query: chosen.0, limit: 12, offset: randomOffset)
-        return (chosen.0, chosen.1, tracks)
-    }
-
-    private func safeSearch(api: SoundCloudAPI, query: String, limit: Int, offset: Int = 0) async -> [Track] {
-        do {
-            let response = try await api.searchTracks(query: query, limit: limit, offset: offset)
-            return response.collection
-        } catch {
-            return []
-        }
-    }
-
-    private func deduplicateTracks(_ tracks: [Track]) -> [Track] {
-        var seen = Set<Int>()
-        var result: [Track] = []
-        result.reserveCapacity(tracks.count)
-        for track in tracks {
-            if seen.insert(track.id).inserted {
-                result.append(track)
-            }
-        }
-        return result
     }
 }
 

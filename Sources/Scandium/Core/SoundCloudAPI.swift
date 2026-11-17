@@ -562,6 +562,89 @@ final class SoundCloudAPI: ObservableObject {
     }
 }
 
+// MARK: - Personalized Home & Playlist Hydration
+
+extension SoundCloudAPI {
+
+    /// Raw `/mixed-selections` response: the personalized sections shown on
+    /// soundcloud.com's home page. Returned as Data so it can be cached as-is.
+    func getMixedSelectionsData(oauthToken: String?) async throws -> Data {
+        let clientID = try await scraper.getClientID()
+        let urlString = "\(Self.baseURL)/mixed-selections?client_id=\(clientID)&limit=10&linked_partitioning=1"
+        return try await performRawRequest(urlString: urlString, headers: Self.authHeaders(oauthToken))
+    }
+
+    static func decodeSelections(_ data: Data) throws -> [HomeSelection] {
+        try JSONDecoder().decode(HomeSelection.Response.self, from: data).selections
+    }
+
+    /// All tracks of a home-feed playlist (user or system playlist), in order.
+    func getPlaylistTracks(_ playlist: HomePlaylist, oauthToken: String?) async throws -> [Track] {
+        let clientID = try await scraper.getClientID()
+        let path: String
+        if playlist.isSystemPlaylist, let urn = playlist.urn {
+            path = "system-playlists/\(urn)"
+        } else {
+            path = "playlists/\(playlist.id)"
+        }
+        let data = try await performRawRequest(
+            urlString: "\(Self.baseURL)/\(path)?client_id=\(clientID)",
+            headers: Self.authHeaders(oauthToken)
+        )
+        let full = try JSONDecoder().decode(HomePlaylist.self, from: data)
+        return try await hydrate(tracks: full.tracks, orderedIDs: full.trackIDs, oauthToken: oauthToken)
+    }
+
+    /// All tracks of a user playlist by numeric ID, in order.
+    func getPlaylistTracks(playlistID: Int, oauthToken: String?) async throws -> [Track] {
+        let clientID = try await scraper.getClientID()
+        let data = try await performRawRequest(
+            urlString: "\(Self.baseURL)/playlists/\(playlistID)?client_id=\(clientID)",
+            headers: Self.authHeaders(oauthToken)
+        )
+        let full = try JSONDecoder().decode(HomePlaylist.self, from: data)
+        return try await hydrate(tracks: full.tracks, orderedIDs: full.trackIDs, oauthToken: oauthToken)
+    }
+
+    /// A user's own uploads, newest first.
+    func getUserTracks(userID: Int, oauthToken: String?, maxItems: Int = 100) async throws -> [Track] {
+        let clientID = try await scraper.getClientID()
+        let urlString = "\(Self.baseURL)/users/\(userID)/tracks?client_id=\(clientID)&limit=50&linked_partitioning=1"
+        return try await fetchAllPages(firstURL: urlString, headers: Self.authHeaders(oauthToken), maxItems: maxItems)
+    }
+
+    /// Fetches full track objects by ID (50 per request), keeping input order.
+    func getTracks(ids: [Int], oauthToken: String?) async throws -> [Track] {
+        guard !ids.isEmpty else { return [] }
+        let clientID = try await scraper.getClientID()
+        var byID: [Int: Track] = [:]
+        for start in stride(from: 0, to: ids.count, by: 50) {
+            let chunk = ids[start..<min(start + 50, ids.count)]
+            let idList = chunk.map(String.init).joined(separator: ",")
+            let data = try await performRawRequest(
+                urlString: "\(Self.baseURL)/tracks?ids=\(idList)&client_id=\(clientID)",
+                headers: Self.authHeaders(oauthToken)
+            )
+            let tracks = (try? JSONDecoder().decode([Lossy<Track>].self, from: data))?.compactMap { $0.value } ?? []
+            for track in tracks { byID[track.id] = track }
+        }
+        return ids.compactMap { byID[$0] }
+    }
+
+    /// Playlists only embed the first few tracks fully; fetch the rest by ID.
+    private func hydrate(tracks: [Track], orderedIDs: [Int], oauthToken: String?) async throws -> [Track] {
+        guard !orderedIDs.isEmpty else { return tracks }
+        var byID = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let missing = orderedIDs.filter { byID[$0] == nil }
+        if !missing.isEmpty {
+            for track in try await getTracks(ids: missing, oauthToken: oauthToken) {
+                byID[track.id] = track
+            }
+        }
+        return orderedIDs.compactMap { byID[$0] }
+    }
+}
+
 // MARK: - API Errors
 
 enum APIError: LocalizedError {
