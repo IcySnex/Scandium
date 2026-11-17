@@ -19,6 +19,7 @@ final class LibraryManager: ObservableObject {
     private static let likedTracksKey = "scandium_liked_tracks_v1"
     private static let recentlyPlayedKey = "scandium_recently_played_v1"
     private static let userPlaylistsKey = "scandium_user_playlists_v1"
+    private static let syncedLikeIDsKey = "scandium_synced_like_ids_v1"
     private static let maxRecentlyPlayed = 50
 
     // MARK: - Init
@@ -57,18 +58,20 @@ final class LibraryManager: ObservableObject {
         saveLikedTracks()
     }
 
-    /// Merges remote liked tracks into local liked tracks, avoiding duplicates
+    /// Replaces the synced portion of the liked list with the remote likes, in
+    /// SoundCloud's order (newest first). Tracks liked only inside the app stay
+    /// on top; tracks that came from an earlier sync but are no longer liked on
+    /// SoundCloud are dropped.
     func syncLikedTracks(_ tracks: [Track]) {
-        var changed = false
-        for track in tracks.reversed() {
-            if !isLiked(track: track) {
-                likedTracks.insert(track, at: 0)
-                changed = true
-            }
-        }
-        if changed {
-            saveLikedTracks()
-        }
+        let remoteIDs = Set(tracks.map { $0.id })
+        let previouslySynced = Set(UserDefaults.standard.array(forKey: Self.syncedLikeIDsKey) as? [Int] ?? [])
+
+        let localOnly = likedTracks.filter { !remoteIDs.contains($0.id) && !previouslySynced.contains($0.id) }
+        let merged = localOnly + tracks
+
+        UserDefaults.standard.set(Array(remoteIDs), forKey: Self.syncedLikeIDsKey)
+        likedTracks = merged
+        saveLikedTracks()
     }
 
     /// Synchronizes user playlists from SoundCloud account
@@ -104,6 +107,7 @@ final class LibraryManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.likedTracksKey)
         UserDefaults.standard.removeObject(forKey: Self.recentlyPlayedKey)
         UserDefaults.standard.removeObject(forKey: Self.userPlaylistsKey)
+        UserDefaults.standard.removeObject(forKey: Self.syncedLikeIDsKey)
     }
 
     // MARK: - Persistence Helpers

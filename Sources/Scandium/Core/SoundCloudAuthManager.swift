@@ -212,38 +212,43 @@ final class SoundCloudAuthManager: ObservableObject {
     private func syncLibraryInternal(token: String?, user: SoundCloudUser) async {
         guard let api = api else { return }
 
-        var likes: [Track] = []
+        // nil means the fetch failed: keep the previously synced data instead of
+        // wiping it with an empty list.
+        var likes: [Track]?
         if let token = token, !token.isEmpty {
             do {
-                likes = try await api.getMeLikesTracks(oauthToken: token, limit: 50)
+                likes = try await api.getMeLikesTracks(oauthToken: token)
             } catch {
-                likes = (try? await api.getUserLikes(userID: user.id, oauthToken: token, limit: 50)) ?? []
+                likes = try? await api.getUserLikes(userID: user.id, oauthToken: token)
             }
         } else {
-            likes = (try? await api.getUserLikes(userID: user.id, oauthToken: nil, limit: 50)) ?? []
+            likes = try? await api.getUserLikes(userID: user.id, oauthToken: nil)
         }
 
-        var playlists: [SoundCloudPlaylist] = []
+        var playlists: [SoundCloudPlaylist]?
         if let token = token, !token.isEmpty {
             do {
                 playlists = try await api.getMePlaylists(oauthToken: token)
             } catch {
-                playlists = (try? await api.getUserPlaylists(userID: user.id, oauthToken: token)) ?? []
+                playlists = try? await api.getUserPlaylists(userID: user.id, oauthToken: token)
             }
         } else {
-            playlists = (try? await api.getUserPlaylists(userID: user.id, oauthToken: nil)) ?? []
+            playlists = try? await api.getUserPlaylists(userID: user.id, oauthToken: nil)
         }
 
         let followings = (try? await api.getUserFollowings(userID: user.id, oauthToken: token, limit: 30)) ?? []
 
-        let uniqueLikes = deduplicateTracks(likes)
-        self.userLikedTracks = uniqueLikes
-        self.userPlaylists = playlists
-        self.userAlbums = playlists.filter { ($0.trackCount ?? 0) >= 5 || ($0.title.lowercased().contains("album") || $0.title.lowercased().contains("ep")) }
+        if let likes = likes {
+            let uniqueLikes = deduplicateTracks(likes)
+            self.userLikedTracks = uniqueLikes
+            LibraryManager.shared.syncLikedTracks(uniqueLikes)
+        }
+        if let playlists = playlists {
+            self.userPlaylists = playlists
+            self.userAlbums = playlists.filter { ($0.trackCount ?? 0) >= 5 || ($0.title.lowercased().contains("album") || $0.title.lowercased().contains("ep")) }
+            LibraryManager.shared.syncUserPlaylists(playlists)
+        }
         self.userFollowings = followings
-
-        LibraryManager.shared.syncLikedTracks(uniqueLikes)
-        LibraryManager.shared.syncUserPlaylists(playlists)
 
         self.savePersistedState()
     }
