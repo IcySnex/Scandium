@@ -6,45 +6,6 @@
 	<string>SoundCloud</string>
 	<key>CFBundleIcons</key>
 	<dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIcon-Cyan</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Cyan</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Monochrome</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Monochrome</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Orange</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Orange</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Purple</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Purple</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
 			<key>CFBundleIconFiles</key>
@@ -57,45 +18,6 @@
 	</dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIcon-Cyan</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Cyan</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Monochrome</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Monochrome</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Orange</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Orange</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Purple</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIcon-Purple</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
 			<key>CFBundleIconFiles</key>

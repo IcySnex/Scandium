@@ -96,10 +96,10 @@ struct ScandiumApp: App {
     }
 
     private func configureAppearance() {
+        // Translucent blurred bars (the system default) so titles and bar
+        // buttons stay readable over scrolling content in light and dark mode.
         let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithTransparentBackground()
-        navAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        navAppearance.configureWithDefaultBackground()
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
         UINavigationBar.appearance().compactAppearance = navAppearance
@@ -133,14 +133,11 @@ struct SafeModeView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.yellow)
-                            Text(settings.loc("Chế độ An Toàn", "Safe Mode"))
+                            Text("Safe Mode")
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(.white)
                         }
-                        Text(settings.loc(
-                            "Scandium đã gặp sự cố ở lần mở trước. Đây là báo cáo lỗi để giúp chẩn đoán vấn đề.",
-                            "Scandium encountered an issue during the previous session. Here is the diagnostic report."
-                        ))
+                        Text("Scandium encountered an issue during the previous session. Here is the diagnostic report.")
                         .font(.system(size: 14))
                         .foregroundColor(Color(red: 0.655, green: 0.655, blue: 0.655))
                         .lineLimit(nil)
@@ -153,7 +150,7 @@ struct SafeModeView: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.white)
                             Spacer()
-                            Button(showFullLog ? settings.loc("Thu gọn", "Collapse") : settings.loc("Xem đầy đủ", "Expand")) {
+                            Button(showFullLog ? "Collapse" : "Expand") {
                                 showFullLog.toggle()
                             }
                             .font(.system(size: 12))
@@ -161,7 +158,7 @@ struct SafeModeView: View {
                         }
 
                         ScrollView(.vertical) {
-                            Text(showFullLog ? crashLog : String(crashLog.prefix(800)) + (crashLog.count > 800 ? settings.loc("\n…(còn nữa)", "\n…(more)") : ""))
+                            Text(showFullLog ? crashLog : String(crashLog.prefix(800)) + (crashLog.count > 800 ? "\n…(more)" : ""))
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(Color(red: 0.8, green: 0.8, blue: 0.8))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -177,7 +174,7 @@ struct SafeModeView: View {
                         Button(action: onContinue) {
                             HStack {
                                 Image(systemName: "arrow.right.circle.fill")
-                                Text(settings.loc("Tiếp tục vào App", "Continue to App"))
+                                Text("Continue to App")
                                     .font(.body.weight(.semibold))
                             }
                             .frame(maxWidth: .infinity)
@@ -191,7 +188,7 @@ struct SafeModeView: View {
                         Button(action: onReset) {
                             HStack {
                                 Image(systemName: "trash.fill")
-                                Text(settings.loc("Xóa toàn bộ dữ liệu đệm & Đặt lại", "Clear All Cache & Reset"))
+                                Text("Clear All Cache & Reset")
                                     .font(.body.weight(.semibold))
                             }
                             .frame(maxWidth: .infinity)

@@ -23,15 +23,14 @@ final class ClientIDScraper: ObservableObject {
     @Published private(set) var status: ScraperStatus = .ready
 
     var statusDescription: String {
-        let isEn = AppSettings.shared.language == .english
         switch status {
-        case .ready: return isEn ? "Ready" : "Sẵn sàng"
-        case .manual: return isEn ? "Manual" : "Thủ công"
-        case .cached: return isEn ? "Cached" : "Đã lưu đệm"
-        case .fallback: return isEn ? "Fallback" : "Dự phòng"
-        case .syncing: return isEn ? "Syncing..." : "Đang làm mới..."
-        case .online: return isEn ? "Online" : "Trực tuyến"
-        case .fallbackError: return isEn ? "Fallback (Error)" : "Dự phòng (Lỗi)"
+        case .ready: return "Ready"
+        case .manual: return "Manual"
+        case .cached: return "Cached"
+        case .fallback: return "Fallback"
+        case .syncing: return "Syncing..."
+        case .online: return "Online"
+        case .fallbackError: return "Fallback (Error)"
         }
     }
 
@@ -426,22 +425,21 @@ enum ScraperError: LocalizedError {
     case allEndpointsFailed(String)
 
     var errorDescription: String? {
-        let isEn = AppSettings.shared.language == .english
         switch self {
         case .noScriptsFound:
-            return isEn ? "No JavaScript bundles found on SoundCloud." : "Không tìm thấy JavaScript bundle nào của SoundCloud."
+            return "No JavaScript bundles found on SoundCloud."
         case .clientIDNotFound:
-            return isEn ? "Could not extract client_id from JavaScript assets." : "Không trích xuất được client_id từ các file JavaScript."
+            return "Could not extract client_id from JavaScript assets."
         case .invalidURL(let url):
-            return isEn ? "Invalid URL: \(url)" : "URL không hợp lệ: \(url)"
+            return "Invalid URL: \(url)"
         case .httpError(let code):
-            return isEn ? "HTTP \(code) error while loading SoundCloud page." : "Lỗi máy chủ HTTP \(code) khi tải trang SoundCloud."
+            return "HTTP \(code) error while loading SoundCloud page."
         case .invalidEncoding:
-            return isEn ? "Unable to decode UTF-8 response." : "Không thể giải mã phản hồi UTF-8."
+            return "Unable to decode UTF-8 response."
         case .deallocated:
-            return isEn ? "ClientIDScraper was deallocated." : "ClientIDScraper bị giải phóng bộ nhớ."
+            return "ClientIDScraper was deallocated."
         case .allEndpointsFailed(let msg):
-            return isEn ? "All client_id sources failed: \(msg)" : "Tất cả các nguồn lấy client_id đều thất bại: \(msg)"
+            return "All client_id sources failed: \(msg)"
         }
     }
 }

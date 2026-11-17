@@ -155,8 +155,8 @@ final class LibraryManager: ObservableObject {
 
         let settings = AppSettings.shared
         likeSyncError = liked
-            ? settings.loc("Không thể thích bài hát trên SoundCloud", "Couldn't like this track on SoundCloud")
-            : settings.loc("Không thể bỏ thích bài hát trên SoundCloud", "Couldn't unlike this track on SoundCloud")
+            ? "Couldn't like this track on SoundCloud"
+            : "Couldn't unlike this track on SoundCloud"
     }
 
     /// Synchronizes user playlists from SoundCloud account

@@ -52,7 +52,7 @@ final class CrashDiagnosticManager {
     func readCrashLog() -> String {
         guard let url = crashLogURL,
               let content = try? String(contentsOf: url, encoding: .utf8) else {
-            return AppSettings.shared.loc("Không có log crash.", "No crash logs available.")
+            return "No crash logs available."
         }
         return content
     }

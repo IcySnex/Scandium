@@ -38,12 +38,12 @@ struct SoundCloudLoginSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(settings.loc("Đăng nhập SoundCloud", "SoundCloud Sign In"))
+                    Text("SoundCloud Sign In")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(ScandiumTheme.textPrimary)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(settings.loc("Đóng", "Close")) {
+                    Button("Close") {
                         isPresented = false
                     }
                     .foregroundColor(ScandiumTheme.textPrimary)
