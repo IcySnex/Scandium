@@ -37,9 +37,13 @@ final class AudioPlayerEngine: ObservableObject {
 
     // MARK: - Queue & Playback Modes
 
-    @Published var queue: [Track] = []
+    /// Tracks in play order. When shuffle is on this is a shuffled copy of
+    /// `sourceQueue` with the current track first.
+    @Published private(set) var queue: [Track] = []
     @Published private(set) var currentIndex: Int = 0
-    @Published var isShuffleEnabled: Bool = false
+    @Published private(set) var isShuffleEnabled: Bool = false
+    /// Tracks in the order they were given (the playlist/likes order).
+    private var sourceQueue: [Track] = []
     @Published var isRepeatEnabled: Bool = false
     @Published private(set) var sleepTimerRemainingSeconds: Int = 0
 
@@ -124,7 +128,7 @@ final class AudioPlayerEngine: ObservableObject {
     // MARK: - Play Track
 
     /// Plays a track by resolving its stream URL and replacing the player's current item.
-    func play(track: Track) {
+    private func play(track: Track) {
         setupIfNeeded()
 
         DispatchQueue.main.async { [weak self] in
@@ -163,13 +167,39 @@ final class AudioPlayerEngine: ObservableObject {
         play(track: queue[index])
     }
 
-    /// Sets the queue and starts playing from the first track (or a specified index).
-    func playQueue(_ tracks: [Track], startingAt index: Int = 0) {
-        queue = tracks
-        currentIndex = max(0, min(index, tracks.count - 1))
-        if !tracks.isEmpty {
-            play(track: tracks[currentIndex])
+    /// Replaces the queue with `tracks` and starts playback.
+    ///
+    /// - Parameters:
+    ///   - index: The track to start with. `nil` starts at the top, or at a
+    ///     random track when shuffling.
+    ///   - shuffle: `true` turns shuffle on ("Shuffle" buttons), `false` turns
+    ///     it off ("Play All"), `nil` keeps the current mode (tapping a track).
+    ///     With shuffle on, the starting track plays first and the rest follow
+    ///     in random order.
+    func playQueue(_ tracks: [Track], startingAt index: Int? = nil, shuffle: Bool? = nil) {
+        guard !tracks.isEmpty else { return }
+        if let shuffle = shuffle {
+            isShuffleEnabled = shuffle
         }
+        sourceQueue = tracks
+
+        let start = index.map { max(0, min($0, tracks.count - 1)) }
+        if isShuffleEnabled {
+            let first = start ?? Int.random(in: 0..<tracks.count)
+            queue = Self.shuffled(tracks, keepingFirst: first)
+            currentIndex = 0
+        } else {
+            queue = tracks
+            currentIndex = start ?? 0
+        }
+        play(track: queue[currentIndex])
+    }
+
+    /// `tracks[first]` followed by the remaining tracks in random order.
+    private static func shuffled(_ tracks: [Track], keepingFirst first: Int) -> [Track] {
+        var rest = tracks
+        let head = rest.remove(at: first)
+        return [head] + rest.shuffled()
     }
 
     // MARK: - Internal Playback Setup
@@ -324,8 +354,22 @@ final class AudioPlayerEngine: ObservableObject {
 
     // MARK: - Queue Navigation
 
+    /// Turning shuffle on keeps the current track playing and shuffles the
+    /// rest of the queue after it; turning it off restores the original order
+    /// and continues from the current track's position in it.
     func toggleShuffle() {
         isShuffleEnabled.toggle()
+        guard !queue.isEmpty else { return }
+        let current = queue.indices.contains(currentIndex) ? queue[currentIndex] : nil
+
+        if isShuffleEnabled {
+            let first = current.flatMap { track in sourceQueue.firstIndex(where: { $0.id == track.id }) } ?? 0
+            queue = Self.shuffled(sourceQueue, keepingFirst: first)
+            currentIndex = 0
+        } else {
+            queue = sourceQueue
+            currentIndex = current.flatMap { track in sourceQueue.firstIndex(where: { $0.id == track.id }) } ?? 0
+        }
     }
 
     func toggleRepeat() {
@@ -334,16 +378,6 @@ final class AudioPlayerEngine: ObservableObject {
 
     func nextTrack() {
         guard !queue.isEmpty else { return }
-        if isShuffleEnabled && queue.count > 1 {
-            var randomIndex = Int.random(in: 0..<queue.count)
-            if randomIndex == currentIndex {
-                randomIndex = (randomIndex + 1) % queue.count
-            }
-            currentIndex = randomIndex
-            play(track: queue[randomIndex])
-            return
-        }
-
         let nextIndex = currentIndex + 1
         if nextIndex < queue.count {
             currentIndex = nextIndex
@@ -377,12 +411,17 @@ final class AudioPlayerEngine: ObservableObject {
     /// Appends a track to the end of the queue.
     func enqueue(_ track: Track) {
         queue.append(track)
+        sourceQueue.append(track)
     }
 
-    /// Inserts a track to play next in the queue.
+    /// Inserts a track to play right after the current one.
     func playNext(_ track: Track) {
-        let insertIndex = min(currentIndex + 1, queue.count)
-        queue.insert(track, at: insertIndex)
+        queue.insert(track, at: min(currentIndex + 1, queue.count))
+        if let current = currentTrack, let sourceIndex = sourceQueue.firstIndex(where: { $0.id == current.id }) {
+            sourceQueue.insert(track, at: sourceIndex + 1)
+        } else {
+            sourceQueue.append(track)
+        }
     }
 
     // MARK: - Buffered Time
@@ -414,7 +453,7 @@ final class AudioPlayerEngine: ObservableObject {
             resume()
             return
         }
-        if currentIndex + 1 < queue.count || isShuffleEnabled {
+        if currentIndex + 1 < queue.count || isRepeatEnabled {
             nextTrack()
         } else if AppSettings.shared.autoPlayRelated, let current = currentTrack {
             Task {
@@ -711,4 +750,11 @@ final class AudioPlayerEngine: ObservableObject {
     var formattedDuration: String {
         Track.formatDuration(duration)
     }
+}
+
+// MARK: - Shared Engine Reference
+
+/// Lets code outside the view hierarchy (e.g. the sleep timer picker) reach the engine.
+enum AudioPlayerEngineWrapper {
+    static weak var sharedEngine: AudioPlayerEngine?
 }

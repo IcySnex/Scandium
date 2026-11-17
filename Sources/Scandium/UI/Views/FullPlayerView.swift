@@ -128,7 +128,7 @@ struct FullPlayerView: View {
 
                 Spacer()
 
-                Text(AppSettings.shared.loc("Đang phát", "Now Playing"))
+                Text("Now Playing")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(ScandiumTheme.subtext)
 
@@ -159,7 +159,7 @@ struct FullPlayerView: View {
     private var trackInfoSection: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(player.currentTrack?.title ?? AppSettings.shared.loc("Chưa chọn bài hát", "No track selected"))
+                Text(player.currentTrack?.title ?? "No track selected")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -431,11 +431,18 @@ struct QueueSheetView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text(AppSettings.shared.loc("Danh sách phát", "Playback Queue"))
-                        .font(.headline)
-                        .foregroundColor(ScandiumTheme.textPrimary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Queue")
+                            .font(.headline)
+                            .foregroundColor(ScandiumTheme.textPrimary)
+                        if player.isShuffleEnabled {
+                            Label("Shuffled", systemImage: "shuffle")
+                                .font(.caption)
+                                .foregroundColor(ScandiumTheme.subtext)
+                        }
+                    }
                     Spacer()
-                    Button(AppSettings.shared.loc("Xong", "Done")) {
+                    Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }
                     .foregroundColor(ScandiumTheme.spotifyGreen)
@@ -452,29 +459,35 @@ struct QueueSheetView: View {
                         Image(systemName: "music.note.list")
                             .font(.system(size: 40))
                             .foregroundColor(ScandiumTheme.subtext.opacity(0.5))
-                        Text(AppSettings.shared.loc("Danh sách phát trống", "Queue is empty"))
+                        Text("Queue is empty")
                             .font(.subheadline)
                             .foregroundColor(ScandiumTheme.subtext)
                         Spacer()
                     }
                 } else {
-                    List {
-                        ForEach(Array(player.queue.enumerated()), id: \.offset) { index, track in
-                            GlassTrackRow(
-                                track: track,
-                                isCurrentlyPlaying: index == player.currentIndex,
-                                onTap: {
-                                    player.play(at: index)
-                                }
-                            )
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    ScrollViewReader { proxy in
+                        List {
+                            ForEach(Array(player.queue.enumerated()), id: \.offset) { index, track in
+                                GlassTrackRow(
+                                    track: track,
+                                    isCurrentlyPlaying: index == player.currentIndex,
+                                    onTap: {
+                                        player.play(at: index)
+                                    }
+                                )
+                                .id(index)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            }
+                        }
+                        .listStyle(PlainListStyle())
+                        .onAppear {
+                            proxy.scrollTo(player.currentIndex, anchor: .top)
                         }
                     }
-                    .listStyle(PlainListStyle())
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(AppSettings.shared.themeMode.colorScheme)
     }
 }
