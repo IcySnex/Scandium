@@ -354,22 +354,14 @@ struct ProfileView: View {
 
                     HairlineDivider()
 
-                    // Sync library
-                    Button(action: {
-                        Task {
-                            await auth.syncLibrary()
-                            showToast(settings.loc("Đã đồng bộ bài hát từ tài khoản!", "Synced library from account!"))
-                        }
-                    }) {
-                        ThreadsRow(
-                            icon: "arrow.triangle.2.circlepath",
-                            iconColor: ScandiumTheme.spotifyGreen,
-                            title: settings.loc("Đồng bộ thư viện tài khoản", "Sync Account Library"),
-                            subtitle: "\(auth.userLikedTracks.count) \(settings.loc("bài hát", "tracks")) • \(auth.userPlaylists.count) playlist",
-                            showDivider: false
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                    // Library status (synced on launch; likes sync instantly)
+                    ThreadsRow(
+                        icon: "checkmark.icloud",
+                        iconColor: ScandiumTheme.spotifyGreen,
+                        title: settings.loc("Thư viện được đồng bộ tự động", "Library syncs automatically"),
+                        subtitle: "\(auth.userLikedTracks.count) \(settings.loc("bài hát", "tracks")) • \(auth.userPlaylists.count) playlist",
+                        showDivider: false
+                    )
                 }
             }
             .background(ScandiumTheme.surfaceDark)

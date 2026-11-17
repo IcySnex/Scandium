@@ -42,15 +42,22 @@ final class LibraryManager: ObservableObject {
         }
     }
 
+    /// Likes a track locally and, when signed in, on the SoundCloud account.
     func like(track: Track) {
         guard !isLiked(track: track) else { return }
         likedTracks.insert(track, at: 0)
         saveLikedTracks()
+        recordEdit(track: track, liked: true)
+        pushRemoteLike(true, track: track, restoreIndex: 0)
     }
 
+    /// Unlikes a track locally and, when signed in, on the SoundCloud account.
     func unlike(track: Track) {
-        likedTracks.removeAll(where: { $0.id == track.id })
+        guard let index = likedTracks.firstIndex(where: { $0.id == track.id }) else { return }
+        likedTracks.remove(at: index)
         saveLikedTracks()
+        recordEdit(track: track, liked: false)
+        pushRemoteLike(false, track: track, restoreIndex: index)
     }
 
     func clearLikedTracks() {
@@ -61,17 +68,95 @@ final class LibraryManager: ObservableObject {
     /// Replaces the synced portion of the liked list with the remote likes, in
     /// SoundCloud's order (newest first). Tracks liked only inside the app stay
     /// on top; tracks that came from an earlier sync but are no longer liked on
-    /// SoundCloud are dropped.
-    func syncLikedTracks(_ tracks: [Track]) {
+    /// SoundCloud are dropped. Likes/unlikes made in the app after the fetch
+    /// started are re-applied so an in-flight sync can't undo them.
+    func syncLikedTracks(_ tracks: [Track], fetchStartedAt: Date = .distantPast) {
         let remoteIDs = Set(tracks.map { $0.id })
-        let previouslySynced = Set(UserDefaults.standard.array(forKey: Self.syncedLikeIDsKey) as? [Int] ?? [])
 
-        let localOnly = likedTracks.filter { !remoteIDs.contains($0.id) && !previouslySynced.contains($0.id) }
-        let merged = localOnly + tracks
+        let localOnly = likedTracks.filter { !remoteIDs.contains($0.id) && !syncedLikeIDs.contains($0.id) }
+        var merged = localOnly + tracks
+        var synced = remoteIDs
 
-        UserDefaults.standard.set(Array(remoteIDs), forKey: Self.syncedLikeIDsKey)
+        let recentEdits = localEdits.filter { $0.value.at >= fetchStartedAt }
+        for (id, edit) in recentEdits.sorted(by: { $0.value.at < $1.value.at }) {
+            if edit.liked {
+                if !merged.contains(where: { $0.id == id }) { merged.insert(edit.track, at: 0) }
+                synced.insert(id)
+            } else {
+                merged.removeAll { $0.id == id }
+                synced.remove(id)
+            }
+        }
+        localEdits = recentEdits
+
+        syncedLikeIDs = synced
         likedTracks = merged
         saveLikedTracks()
+    }
+
+    /// Set when sending a like/unlike to SoundCloud fails (the local change is
+    /// rolled back). The UI shows it and clears it.
+    @Published var likeSyncError: String?
+
+    // MARK: - Write-through to SoundCloud
+
+    private struct LocalEdit {
+        let liked: Bool
+        let track: Track
+        let at: Date
+    }
+
+    /// Like/unlike taps since the last sync, keyed by track ID.
+    private var localEdits: [Int: LocalEdit] = [:]
+    /// Serializes remote like/unlike requests so they reach SoundCloud in tap order.
+    private var remoteLikeChain: Task<Void, Never>?
+
+    /// IDs of liked tracks that are known to be liked on the SoundCloud account.
+    private var syncedLikeIDs: Set<Int> {
+        get { Set(UserDefaults.standard.array(forKey: Self.syncedLikeIDsKey) as? [Int] ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: Self.syncedLikeIDsKey) }
+    }
+
+    private func recordEdit(track: Track, liked: Bool) {
+        localEdits[track.id] = LocalEdit(liked: liked, track: track, at: Date())
+    }
+
+    private func pushRemoteLike(_ liked: Bool, track: Track, restoreIndex: Int) {
+        let auth = SoundCloudAuthManager.shared
+        guard auth.canSyncLikes else { return }
+
+        let previous = remoteLikeChain
+        remoteLikeChain = Task { @MainActor [weak self] in
+            await previous?.value
+            do {
+                try await auth.setRemoteLike(liked, track: track)
+                guard let self = self else { return }
+                if liked { self.syncedLikeIDs.insert(track.id) } else { self.syncedLikeIDs.remove(track.id) }
+            } catch {
+                self?.rollBack(liked, track: track, restoreIndex: restoreIndex, error: error)
+            }
+        }
+    }
+
+    /// Undoes a local like/unlike whose remote request failed, unless the user
+    /// has already toggled the track again since.
+    @MainActor
+    private func rollBack(_ liked: Bool, track: Track, restoreIndex: Int, error: Error) {
+        print("[LibraryManager] Remote \(liked ? "like" : "unlike") failed for \(track.id): \(error.localizedDescription)")
+        guard isLiked(track: track) == liked else { return }
+
+        if liked {
+            likedTracks.removeAll { $0.id == track.id }
+        } else {
+            likedTracks.insert(track, at: min(restoreIndex, likedTracks.count))
+        }
+        localEdits[track.id] = nil
+        saveLikedTracks()
+
+        let settings = AppSettings.shared
+        likeSyncError = liked
+            ? settings.loc("Không thể thích bài hát trên SoundCloud", "Couldn't like this track on SoundCloud")
+            : settings.loc("Không thể bỏ thích bài hát trên SoundCloud", "Couldn't unlike this track on SoundCloud")
     }
 
     /// Synchronizes user playlists from SoundCloud account

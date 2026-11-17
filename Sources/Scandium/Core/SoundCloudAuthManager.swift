@@ -200,6 +200,17 @@ final class SoundCloudAuthManager: ObservableObject {
 
     // MARK: - Synchronize Library (Likes & Playlists)
 
+    private var didSyncThisLaunch = false
+
+    /// Pulls the library from SoundCloud once per app launch. Later changes
+    /// made in the app are pushed immediately (see `setRemoteLike`).
+    @MainActor
+    func syncOnLaunchIfNeeded() async {
+        guard !didSyncThisLaunch, currentUser != nil else { return }
+        didSyncThisLaunch = true
+        await syncLibrary()
+    }
+
     @MainActor
     func syncLibrary() async {
         guard let user = currentUser else { return }
@@ -208,17 +219,45 @@ final class SoundCloudAuthManager: ObservableObject {
         self.isLoading = false
     }
 
+    // MARK: - Write-through Likes
+
+    /// True when likes made in the app can be sent to the SoundCloud account.
+    var canSyncLikes: Bool {
+        currentUser != nil && !(oauthToken ?? "").isEmpty
+    }
+
+    /// Likes or unlikes a track on the SoundCloud account.
+    @MainActor
+    func setRemoteLike(_ liked: Bool, track: Track) async throws {
+        guard let api = api, let user = currentUser, let token = oauthToken, !token.isEmpty else {
+            throw APIError.invalidResponse
+        }
+        try await api.setTrackLiked(liked, trackID: track.id, userID: user.id, oauthToken: token)
+
+        if liked {
+            if !userLikedTracks.contains(where: { $0.id == track.id }) {
+                userLikedTracks.insert(track, at: 0)
+            }
+        } else {
+            userLikedTracks.removeAll { $0.id == track.id }
+        }
+        savePersistedState()
+    }
+
     @MainActor
     private func syncLibraryInternal(token: String?, user: SoundCloudUser) async {
         guard let api = api else { return }
 
         // nil means the fetch failed: keep the previously synced data instead of
         // wiping it with an empty list.
+        let fetchStartedAt = Date()
         var likes: [Track]?
         if let token = token, !token.isEmpty {
-            do {
-                likes = try await api.getMeLikesTracks(oauthToken: token)
-            } catch {
+            if let trackLikes = try? await api.getUserTrackLikes(userID: user.id, oauthToken: token) {
+                likes = trackLikes
+            } else if let meLikes = try? await api.getMeLikesTracks(oauthToken: token) {
+                likes = meLikes
+            } else {
                 likes = try? await api.getUserLikes(userID: user.id, oauthToken: token)
             }
         } else {
@@ -241,7 +280,7 @@ final class SoundCloudAuthManager: ObservableObject {
         if let likes = likes {
             let uniqueLikes = deduplicateTracks(likes)
             self.userLikedTracks = uniqueLikes
-            LibraryManager.shared.syncLikedTracks(uniqueLikes)
+            LibraryManager.shared.syncLikedTracks(uniqueLikes, fetchStartedAt: fetchStartedAt)
         }
         if let playlists = playlists {
             self.userPlaylists = playlists

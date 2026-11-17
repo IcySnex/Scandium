@@ -73,10 +73,40 @@ struct MainContainerView: View {
                 .environmentObject(scraper)
                 .environmentObject(library)
         }
+        .overlay(alignment: .top) {
+            if let message = library.likeSyncError {
+                likeErrorBanner(message)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: library.likeSyncError)
         .onAppear {
             initializeClientID()
             SoundCloudAuthManager.shared.setAPI(api)
+            Task {
+                await SoundCloudAuthManager.shared.syncOnLaunchIfNeeded()
+            }
         }
+    }
+
+    // MARK: - Like Sync Error Banner
+
+    private func likeErrorBanner(_ message: String) -> some View {
+        Text(message)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.red.opacity(0.85))
+            .clipShape(Capsule())
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .onTapGesture { library.likeSyncError = nil }
+            .task(id: message) {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if library.likeSyncError == message {
+                    library.likeSyncError = nil
+                }
+            }
     }
 
     // MARK: - Tab Content Switcher

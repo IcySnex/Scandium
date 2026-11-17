@@ -110,6 +110,35 @@ final class SoundCloudAPI: ObservableObject {
         )
     }
 
+    /// Fetches all of a user's liked tracks via /users/{id}/track_likes (the
+    /// endpoint soundcloud.com uses), following `next_href` across pages.
+    func getUserTrackLikes(userID: Int, oauthToken: String, maxItems: Int = defaultMaxSyncItems) async throws -> [Track] {
+        let clientID = try await scraper.getClientID()
+        let urlString = "\(Self.baseURL)/users/\(userID)/track_likes?client_id=\(clientID)&limit=\(Self.syncPageSize)&linked_partitioning=1"
+        let items: [LikeItem] = try await fetchAllPages(
+            firstURL: urlString,
+            headers: ["Authorization": "OAuth \(oauthToken)"],
+            maxItems: maxItems
+        )
+        return items.compactMap { $0.track }
+    }
+
+    /// Likes (PUT) or unlikes (DELETE) a single track on the user's account.
+    /// Unliking a track that isn't liked (404) counts as success.
+    func setTrackLiked(_ liked: Bool, trackID: Int, userID: Int, oauthToken: String) async throws {
+        let clientID = try await scraper.getClientID()
+        let urlString = "\(Self.baseURL)/users/\(userID)/track_likes/\(trackID)?client_id=\(clientID)"
+        do {
+            _ = try await performRawRequest(
+                urlString: urlString,
+                method: liked ? "PUT" : "DELETE",
+                headers: ["Authorization": "OAuth \(oauthToken)"]
+            )
+        } catch APIError.httpError(statusCode: 404) where !liked {
+            return
+        }
+    }
+
     /// Fetches all of the authenticated user's liked tracks via /me/likes/tracks,
     /// following `next_href` until every page is loaded (or `maxItems` is reached).
     func getMeLikesTracks(oauthToken: String, maxItems: Int = defaultMaxSyncItems) async throws -> [Track] {
@@ -355,6 +384,7 @@ final class SoundCloudAPI: ObservableObject {
 
     private func performRawRequest(
         urlString: String,
+        method: String = "GET",
         headers: [String: String]? = nil,
         retryCount: Int = 0
     ) async throws -> Data {
@@ -363,6 +393,7 @@ final class SoundCloudAPI: ObservableObject {
         }
 
         var request = URLRequest(url: url)
+        request.httpMethod = method
         request.setValue(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
             forHTTPHeaderField: "User-Agent"
@@ -388,6 +419,7 @@ final class SoundCloudAPI: ObservableObject {
             let refreshedURLString = replaceClientID(in: urlString, with: newClientID)
             return try await performRawRequest(
                 urlString: refreshedURLString,
+                method: method,
                 headers: headers,
                 retryCount: retryCount + 1
             )
