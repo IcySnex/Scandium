@@ -65,8 +65,8 @@ struct MainContainerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
         .ignoresSafeArea(.container, edges: .bottom)
+        .accentColor(settings.accentColor.color)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .fullScreenCover(isPresented: $showFullPlayer) {
             FullPlayerView()
@@ -113,14 +113,12 @@ struct MainContainerView: View {
 
     // MARK: - Tab Stacks
 
-    /// Wraps a tab's root screen in its own navigation stack. Root screens
-    /// draw their own large header, so the bar only appears on pushed pages.
+    /// Wraps a tab's root screen in its own navigation stack with a large title.
     private func tabStack<Content: View>(_ tab: ScandiumTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationView {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AmbientCanvasBackground(artworkURL: player.currentTrack?.artworkURL(size: .t500x500)))
-                .navigationBarHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .opacity(selectedTab == tab ? 1 : 0)

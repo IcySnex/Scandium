@@ -24,11 +24,6 @@ struct ProfileView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Profile")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .padding(.top, 8)
-
                 accountCard
                 appearanceSection
                 playbackSection
@@ -37,8 +32,10 @@ struct ProfileView: View {
                 aboutSection
             }
             .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 130)
         }
+        .navigationTitle("Profile")
         .sheet(isPresented: $showSignIn) {
             SoundCloudLoginSheet(isPresented: $showSignIn, onLoginSuccess: {
                 showToast("Signed in")

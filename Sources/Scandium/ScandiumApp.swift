@@ -96,13 +96,16 @@ struct ScandiumApp: App {
     }
 
     private func configureAppearance() {
-        // Translucent blurred bars (the system default) so titles and bar
-        // buttons stay readable over scrolling content in light and dark mode.
-        let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithDefaultBackground()
-        UINavigationBar.appearance().standardAppearance = navAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().compactAppearance = navAppearance
+        // Clear while the page is scrolled to the top, then the system's
+        // blurred bar once content scrolls underneath, so titles and buttons
+        // stay readable in light and dark mode.
+        let scrolled = UINavigationBarAppearance()
+        scrolled.configureWithDefaultBackground()
+        let atTop = UINavigationBarAppearance()
+        atTop.configureWithTransparentBackground()
+        UINavigationBar.appearance().standardAppearance = scrolled
+        UINavigationBar.appearance().compactAppearance = scrolled
+        UINavigationBar.appearance().scrollEdgeAppearance = atTop
     }
 }
 

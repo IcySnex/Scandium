@@ -27,13 +27,12 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
-                headerView
-                    .padding(.top, 8)
-
                 likedSongsCard
+                    .padding(.horizontal, 16)
 
                 if let error = store.error {
                     homeErrorBanner(error)
+                        .padding(.horizontal, 16)
                 }
 
                 if store.selections.isEmpty && store.isLoading {
@@ -44,50 +43,28 @@ struct DiscoverView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 130) // Keep content clear of the mini player & tab bar
+        }
+        .navigationTitle("Home")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                // Reload: refetches the home feed and re-syncs likes & playlists
+                if store.isLoading {
+                    ProgressView()
+                } else {
+                    Button(action: { Task { await store.reload(api: api) } }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .accessibilityLabel("Reload")
+                }
+            }
         }
         .refreshable {
             await store.reload(api: api)
         }
         .task {
             await store.loadIfNeeded(api: api)
-        }
-    }
-
-    // MARK: - Header
-
-    private var headerView: some View {
-        HStack(alignment: .center) {
-            Text("Home")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(ScandiumTheme.textPrimary)
-
-            Spacer()
-
-            HStack(spacing: 10) {
-                // Reload: refetches the home feed and re-syncs likes & playlists
-                Button(action: {
-                    Task { await store.reload(api: api) }
-                }) {
-                    Group {
-                        if store.isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.textPrimary))
-                                .scaleEffect(0.75)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                    }
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(ScandiumTheme.surfaceElevated)
-                    .clipShape(Circle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(store.isLoading)
-            }
         }
     }
 
@@ -144,7 +121,10 @@ struct DiscoverView: View {
                         .lineLimit(2)
                 }
             }
+            .padding(.horizontal, 16)
 
+            // Edge to edge: the row scrolls under the screen edges while its
+            // first card lines up with the 16pt content margin.
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(selection.items) { item in
@@ -157,6 +137,7 @@ struct DiscoverView: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -211,15 +192,22 @@ struct DiscoverView: View {
     private var shimmerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color.white.opacity(0.08))
+                .fill(ScandiumTheme.surfaceElevated)
                 .frame(width: 160, height: 18)
-            HStack(spacing: 14) {
-                ForEach(0..<3, id: \.self) { _ in
-                    ShimmerView()
-                        .frame(width: Self.cardSize, height: Self.cardSize)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, 16)
+            // Scrolls like the real rows so the placeholders never widen the
+            // page beyond the screen (3 cards don't fit on a 4" iPhone).
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        ShimmerView()
+                            .frame(width: Self.cardSize, height: Self.cardSize)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
                 }
+                .padding(.horizontal, 16)
             }
+            .disabled(true)
         }
     }
 

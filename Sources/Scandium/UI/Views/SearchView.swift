@@ -109,26 +109,13 @@ struct SearchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerView
             searchBarView
             contentView
         }
+        .navigationTitle("Search")
         .onAppear {
             loadSearchHistory()
         }
-    }
-
-    // MARK: - Header
-
-    private var headerView: some View {
-        HStack {
-            Text("Search")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(ScandiumTheme.textPrimary)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
     }
 
     // MARK: - Search Bar

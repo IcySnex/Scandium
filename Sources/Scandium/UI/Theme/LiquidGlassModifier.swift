@@ -111,37 +111,31 @@ struct AmbientCanvasBackground: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let w = max(1, geo.size.width)
-            let h = max(1, geo.size.height)
-
-            ZStack {
-                // True OLED Black base
-                ScandiumTheme.bgPrimary
-
-                // Subtle, non-intrusive soft glow from artwork when playing.
-                // Fixed dimensions and strictly clipped to prevent expanding parent containers.
-                if let image = loadedImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .frame(width: w, height: h)
-                        .clipped()
-                        .blur(radius: 60)
-                        .opacity(0.18)
+        // The glow is an overlay on a view that always fills its parent, so it
+        // can't animate its size (which made it grow out of the top-left
+        // corner); only its opacity fades in and out.
+        ScandiumTheme.bgPrimary
+            .overlay(
+                Group {
+                    if let image = loadedImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .blur(radius: 60)
+                            .opacity(0.18)
+                            .transition(.opacity)
+                    }
                 }
-            }
-            .frame(width: w, height: h)
+            )
             .clipped()
-            .contentShape(Rectangle())
-        }
-        .allowsHitTesting(false)
-        .ignoresSafeArea()
-        .onAppear {
-            loadArtwork(artworkURL)
-        }
-        .onChange(of: artworkURL?.absoluteString) { _ in
-            loadArtwork(artworkURL)
-        }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .onAppear {
+                loadArtwork(artworkURL)
+            }
+            .onChange(of: artworkURL?.absoluteString) { _ in
+                loadArtwork(artworkURL)
+            }
     }
 
     private func loadArtwork(_ url: URL?) {

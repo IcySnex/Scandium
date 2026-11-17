@@ -46,28 +46,13 @@ struct LibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerView
 
             horizontalTabsBar
                 .padding(.vertical, 10)
 
             contentView
         }
-    }
-
-    // MARK: - Header
-
-    private var headerView: some View {
-        HStack {
-            Text("Library")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(ScandiumTheme.textPrimary)
-
-            Spacer()
-
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .navigationTitle("Library")
     }
 
     // MARK: - Horizontal Filter Tabs Bar
