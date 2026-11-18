@@ -43,7 +43,7 @@ struct OAuthTokenGuideView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         .navigationTitle("Find Your Token")
@@ -66,7 +66,7 @@ struct ClientIDGuideView: View {
                 GuideStep(4, "Copy the 32-character value", "Paste it under Client ID on the previous page.")
             }
             .padding(16)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         .navigationTitle("Find a Client ID")

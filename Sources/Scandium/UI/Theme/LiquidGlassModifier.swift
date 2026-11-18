@@ -10,41 +10,35 @@ enum ScandiumTheme {
         AppSettings.shared.isDark
     }
 
-    // Dynamic surfaces based on theme
-    static var bgPrimary: Color {
-        isDark ? Color.black : Color(red: 0.95, green: 0.95, blue: 0.97)
+    // Colors resolve against the current light/dark trait, so every view
+    // updates when the theme changes, not only views that observe settings.
+    private static func dynamic(light: UIColor, dark: UIColor) -> Color {
+        Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 
-    static var surfaceDark: Color {
-        isDark ? Color(red: 0.071, green: 0.071, blue: 0.071) : Color(red: 0.91, green: 0.91, blue: 0.93)
+    private static func gray(_ white: CGFloat, _ blue: CGFloat? = nil) -> UIColor {
+        UIColor(red: white, green: white, blue: blue ?? white, alpha: 1)
     }
 
-    static var surfaceCard: Color {
-        isDark ? Color(red: 0.094, green: 0.094, blue: 0.094) : Color.white
-    }
+    static let bgPrimary = dynamic(light: gray(0.95, 0.97), dark: .black)
+    static let surfaceDark = dynamic(light: gray(0.91, 0.93), dark: gray(0.071))
+    static let surfaceCard = dynamic(light: .white, dark: gray(0.094))
+    static let surfaceElevated = dynamic(light: gray(0.88, 0.90), dark: gray(0.110, 0.118))
 
-    static var surfaceElevated: Color {
-        isDark ? Color(red: 0.110, green: 0.110, blue: 0.118) : Color(red: 0.88, green: 0.88, blue: 0.90)
-    }
+    static let textPrimary = dynamic(light: gray(0.1), dark: .white)
+    static let subtext = dynamic(light: gray(0.45, 0.48), dark: gray(0.655))
 
-    // Dynamic text
-    static var textPrimary: Color {
-        isDark ? Color.white : Color(red: 0.1, green: 0.1, blue: 0.1)
-    }
-
-    static var subtext: Color {
-        isDark ? Color(red: 0.655, green: 0.655, blue: 0.655) : Color(red: 0.45, green: 0.45, blue: 0.48)
-    }
-
-    // Hairline divider
-    static var hairline: Color {
-        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.10)
-    }
+    static let hairline = dynamic(
+        light: UIColor.black.withAlphaComponent(0.10),
+        dark: UIColor.white.withAlphaComponent(0.08)
+    )
     static let hairlinewidth: CGFloat = 0.5
 
     // Accents
+    /// Follows the `.accentColor` set at the root (and on presented
+    /// screens), so every view picks up a new accent immediately.
     static var accent: Color {
-        AppSettings.shared.accentColor.color
+        Color.accentColor
     }
     static var spotifyGreen: Color {
         accent

@@ -185,7 +185,7 @@ struct SearchView: View {
                     trackListView
                 }
             }
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
     }
 

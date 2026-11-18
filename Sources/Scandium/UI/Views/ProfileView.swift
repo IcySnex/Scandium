@@ -33,7 +33,7 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .navigationTitle("Profile")
         .sheet(isPresented: $showSignIn) {
@@ -45,6 +45,7 @@ struct ProfileView: View {
             ManualSignInSheet(isPresented: $showManualSignIn) { message in
                 showToast(message)
             }
+            .accentColor(settings.accentColor.color)
         }
         .confirmationDialog("Log out of SoundCloud?", isPresented: $showLogOutConfirm, titleVisibility: .visible) {
             Button("Log Out", role: .destructive) {
@@ -291,7 +292,7 @@ struct ProfileView: View {
                 .padding(.vertical, 10)
                 .background(Color(white: 0.15))
                 .clipShape(Capsule())
-                .padding(.bottom, 140)
+                .padding(.bottom, 80)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -418,7 +419,7 @@ struct ClientIDSettingsView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         .navigationTitle("Client ID")

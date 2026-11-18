@@ -50,7 +50,7 @@ struct SoundCloudLoginSheet: View {
                 }
             }
         }
-        .accentColor(ScandiumTheme.accent)
+        .accentColor(AppSettings.shared.accentColor.color)
         .preferredColorScheme(settings.themeMode.colorScheme)
     }
 

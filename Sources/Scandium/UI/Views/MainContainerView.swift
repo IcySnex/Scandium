@@ -9,7 +9,7 @@ enum ScandiumTab: Int, CaseIterable {
     case library = 2
     case profile = 3
 
-    func title(settings: AppSettings) -> String {
+    var title: String {
         switch self {
         case .home: return "Home"
         case .search: return "Search"
@@ -41,31 +41,24 @@ struct MainContainerView: View {
     init() {}
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ScandiumTheme.bgPrimary.ignoresSafeArea()
-
-            // All tabs stay alive so each keeps its navigation stack and
-            // scroll position while you switch between them.
+        // A native TabView keeps every tab's navigation stack and scroll
+        // position alive and handles safe areas and bar layout itself.
+        TabView(selection: $selectedTab) {
             tabStack(.home) {
                 DiscoverView(onNavigateToLibrary: { selectedTab = .library })
             }
             tabStack(.search) { SearchView() }
             tabStack(.library) { LibraryView() }
             tabStack(.profile) { ProfileView() }
-
-            // Floating Mini Player & Bottom TabBar (Seamless at bottom Home Indicator)
-            VStack(spacing: 0) {
-                if player.currentTrack != nil {
-                    FloatingMiniPlayer(onTap: {
-                        showFullPlayer = true
-                    })
-                }
-
-                bottomTabBar
+        }
+        .overlay(alignment: .bottom) {
+            // Sits right above the tab bar
+            if player.currentTrack != nil {
+                FloatingMiniPlayer(onTap: { showFullPlayer = true })
+                    .padding(.bottom, ScandiumTheme.tabBarHeight)
+                    .ignoresSafeArea(.keyboard)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea(.container, edges: .bottom)
         .accentColor(settings.accentColor.color)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .fullScreenCover(isPresented: $showFullPlayer) {
@@ -74,6 +67,7 @@ struct MainContainerView: View {
                 .environmentObject(api)
                 .environmentObject(scraper)
                 .environmentObject(library)
+                .accentColor(settings.accentColor.color)
         }
         .overlay(alignment: .top) {
             if let message = library.likeSyncError {
@@ -113,7 +107,7 @@ struct MainContainerView: View {
 
     // MARK: - Tab Stacks
 
-    /// Wraps a tab's root screen in its own navigation stack with a large title.
+    /// A tab's root screen in its own navigation stack with a large title.
     private func tabStack<Content: View>(_ tab: ScandiumTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationView {
             content()
@@ -121,49 +115,11 @@ struct MainContainerView: View {
                 .background(AmbientCanvasBackground(artworkURL: player.currentTrack?.artworkURL(size: .t500x500)))
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .opacity(selectedTab == tab ? 1 : 0)
-        .allowsHitTesting(selectedTab == tab)
-        .accessibilityHidden(selectedTab != tab)
-    }
-
-    // MARK: - Bottom TabBar (Seamless dark translucent with thin SF symbols)
-
-    private var bottomTabBar: some View {
-        VStack(spacing: 0) {
-            // Hairline top border
-            HairlineDivider()
-
-            HStack(spacing: 0) {
-                ForEach(ScandiumTab.allCases, id: \.rawValue) { tab in
-                    Button(action: {
-                        selectedTab = tab
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .light))
-                                .foregroundColor(selectedTab == tab ? ScandiumTheme.textPrimary : ScandiumTheme.subtext)
-
-                            Text(tab.title(settings: settings))
-                                .font(.system(size: 10, weight: selectedTab == tab ? .semibold : .regular))
-                                .foregroundColor(selectedTab == tab ? ScandiumTheme.textPrimary : ScandiumTheme.subtext)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                        .padding(.bottom, 24) // Extra bottom padding for iPhone 11 Home indicator
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
+        .tabItem {
+            Image(systemName: tab.icon)
+            Text(tab.title)
         }
-        .background(
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                Rectangle()
-                    .fill(ScandiumTheme.bgPrimary.opacity(0.85))
-            }
-        )
+        .tag(tab)
     }
 
     // MARK: - Initialization

@@ -67,7 +67,6 @@ struct ScandiumApp: App {
                         .environmentObject(api)
                         .environmentObject(player)
                         .environmentObject(library)
-                        .transition(.opacity)
                 }
             }
             .preferredColorScheme(settings.themeMode.colorScheme)
@@ -89,9 +88,9 @@ struct ScandiumApp: App {
     // MARK: - Helpers
 
     private func mountMainUI() {
-        withAnimation(.easeIn(duration: 0.25)) {
-            isUIReady = true
-        }
+        // No animation: mounting inside an animation made the first layout of
+        // every screen animate in from the top-left corner.
+        isUIReady = true
         CrashDiagnosticManager.shared.markLaunchSucceeded()
     }
 
@@ -106,6 +105,12 @@ struct ScandiumApp: App {
         UINavigationBar.appearance().standardAppearance = scrolled
         UINavigationBar.appearance().compactAppearance = scrolled
         UINavigationBar.appearance().scrollEdgeAppearance = atTop
+
+        // Tab bar: always blurred, since the mini player sits on top of it
+        let tabBar = UITabBarAppearance()
+        tabBar.configureWithDefaultBackground()
+        UITabBar.appearance().standardAppearance = tabBar
+        UITabBar.appearance().scrollEdgeAppearance = tabBar
     }
 }
 

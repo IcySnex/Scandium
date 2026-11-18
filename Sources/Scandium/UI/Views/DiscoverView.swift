@@ -44,7 +44,7 @@ struct DiscoverView: View {
                 }
             }
             .padding(.top, 8)
-            .padding(.bottom, 130) // Keep content clear of the mini player & tab bar
+            .padding(.bottom, 80) // Keep content clear of the mini player
         }
         .navigationTitle("Home")
         .toolbar {
@@ -289,8 +289,16 @@ final class DiscoverDataStore: ObservableObject {
         error = nil
         defer { isLoading = false }
 
+        let token = SoundCloudAuthManager.shared.oauthToken
         do {
-            let data = try await api.getMixedSelectionsData(oauthToken: SoundCloudAuthManager.shared.oauthToken)
+            let data: Data
+            do {
+                data = try await api.getMixedSelectionsData(oauthToken: token)
+            } catch APIError.httpError(let code) where token != nil && (code == 401 || code == 403) {
+                // The sign-in was rejected: show the public feed instead of nothing
+                self.error = "SoundCloud rejected your sign-in (HTTP \(code)), so this isn't your personal feed. Sign in again in Profile."
+                data = try await api.getMixedSelectionsData(oauthToken: nil)
+            }
             let fresh = try SoundCloudAPI.decodeSelections(data)
             guard !fresh.isEmpty else { throw APIError.invalidResponse }
             selections = fresh
@@ -299,7 +307,7 @@ final class DiscoverDataStore: ObservableObject {
             }
         } catch {
             if selections.isEmpty {
-                self.error = "Couldn't load your home feed. Sign in to SoundCloud or try again."
+                self.error = "Couldn't load your home feed: \(error.localizedDescription)"
             }
         }
     }

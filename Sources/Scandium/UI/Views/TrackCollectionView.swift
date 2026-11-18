@@ -70,7 +70,7 @@ struct TrackCollectionView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         .navigationTitle(title)

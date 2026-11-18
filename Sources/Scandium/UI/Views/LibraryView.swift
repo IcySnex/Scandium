@@ -102,7 +102,7 @@ struct LibraryView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 130)
+            .padding(.bottom, 80)
         }
         .refreshable {
             if auth.isAuthenticated {
