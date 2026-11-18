@@ -17,176 +17,49 @@ struct SearchView: View {
     @State private var hasSearched: Bool = false
     @State private var searchHistory: [String] = []
 
-    @ObservedObject private var settings = AppSettings.shared
-
-    struct SearchCategory: Identifiable {
-        let id: String
-        let title: String
-        let query: String
-        let icon: String
-        let colors: [Color]
-    }
-
-    private var browseCategories: [SearchCategory] {
-        return [
-            SearchCategory(
-                id: "pop",
-                title: "Pop & Top Hits",
-                query: "Today Top Hits Pop",
-                icon: "music.mic",
-                colors: [Color(red: 0.90, green: 0.20, blue: 0.55), Color(red: 0.60, green: 0.10, blue: 0.75)]
-            ),
-            SearchCategory(
-                id: "hiphop",
-                title: "Hip-Hop & Rap",
-                query: "Hip Hop Rap Hits",
-                icon: "flame.fill",
-                colors: [Color(red: 0.95, green: 0.40, blue: 0.10), Color(red: 0.85, green: 0.15, blue: 0.20)]
-            ),
-            SearchCategory(
-                id: "electronic",
-                title: "Dance & EDM",
-                query: "EDM Festival Dance",
-                icon: "bolt.horizontal.fill",
-                colors: [Color(red: 0.05, green: 0.70, blue: 0.90), Color(red: 0.15, green: 0.30, blue: 0.85)]
-            ),
-            SearchCategory(
-                id: "chill",
-                title: "Chill & Lo-Fi",
-                query: "Lo-Fi Beats Study Chill",
-                icon: "cup.and.saucer.fill",
-                colors: [Color(red: 0.10, green: 0.65, blue: 0.55), Color(red: 0.20, green: 0.80, blue: 0.45)]
-            ),
-            SearchCategory(
-                id: "rock",
-                title: "Rock & Alternative",
-                query: "Rock Alternative Classic",
-                icon: "guitars.fill",
-                colors: [Color(red: 0.75, green: 0.15, blue: 0.20), Color(red: 0.30, green: 0.10, blue: 0.20)]
-            ),
-            SearchCategory(
-                id: "rnb",
-                title: "R&B & Soul",
-                query: "R&B Soul Chill",
-                icon: "heart.fill",
-                colors: [Color(red: 0.50, green: 0.15, blue: 0.80), Color(red: 0.70, green: 0.20, blue: 0.65)]
-            ),
-            SearchCategory(
-                id: "workout",
-                title: "Workout & Energy",
-                query: "Workout Gym Motivation Energy",
-                icon: "figure.run",
-                colors: [Color(red: 0.95, green: 0.50, blue: 0.10), Color(red: 0.90, green: 0.25, blue: 0.10)]
-            ),
-            SearchCategory(
-                id: "focus",
-                title: "Focus & Ambient",
-                query: "Deep Focus Ambient Piano",
-                icon: "brain.head.profile",
-                colors: [Color(red: 0.25, green: 0.40, blue: 0.80), Color(red: 0.20, green: 0.20, blue: 0.45)]
-            ),
-            SearchCategory(
-                id: "indie",
-                title: "Indie Discoveries",
-                query: "Indie Pop Folk Discover",
-                icon: "sparkles",
-                colors: [Color(red: 0.65, green: 0.20, blue: 0.70), Color(red: 0.85, green: 0.20, blue: 0.50)]
-            ),
-            SearchCategory(
-                id: "acoustic",
-                title: "Acoustic & Melodic",
-                query: "Acoustic Guitar Melodic",
-                icon: "waveform",
-                colors: [Color(red: 0.20, green: 0.60, blue: 0.35), Color(red: 0.10, green: 0.40, blue: 0.25)]
-            )
-        ]
-    }
-
     private static let searchHistoryKey = "scandium_search_history_v1"
     private static let maxSearchHistory = 12
 
     init() {}
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchBarView
-            contentView
-        }
-        .navigationTitle("Search")
-        .onAppear {
-            loadSearchHistory()
-        }
-    }
-
-    // MARK: - Search Bar
-
-    private var searchBarView: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(ScandiumTheme.subtext)
-
-            ZStack(alignment: .leading) {
-                if searchText.isEmpty {
-                    Text("Search songs, artists...")
-                        .font(.system(size: 15))
-                        .foregroundColor(ScandiumTheme.subtext.opacity(0.6))
-                }
-                TextField("", text: $searchText)
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .font(.system(size: 15))
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .submitLabel(.search)
-                    .onSubmit {
-                        performSearch()
-                    }
-            }
-
-            if !searchText.isEmpty {
-                Button(action: {
-                    searchText = ""
-                    tracks = []
-                    hasSearched = false
-                    errorMessage = nil
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(ScandiumTheme.subtext)
-                }
-            }
-
-            if isLoading {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.textPrimary))
-                    .scaleEffect(0.7)
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(ScandiumTheme.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: ScandiumTheme.cornerRadiusMedium, style: .continuous))
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-    }
-
-    // MARK: - Content
-
-    private var contentView: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 4) {
                 if !hasSearched && tracks.isEmpty {
-                    emptyStateView
+                    recentSearchesSection
                 } else if let error = errorMessage {
                     errorView(error)
-                } else if tracks.isEmpty && hasSearched && !isLoading {
+                } else if isLoading && tracks.isEmpty {
+                    ProgressView()
+                        .padding(.top, 40)
+                } else if tracks.isEmpty {
                     noResultsView
                 } else {
                     trackListView
                 }
             }
+            .padding(.top, 8)
             .padding(.bottom, 80)
         }
+        .navigationTitle("Search")
+        // The system search field in the navigation bar
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Songs, artists"
+        )
+        .disableAutocorrection(true)
+        .onSubmit(of: .search) { performSearch() }
+        .onChange(of: searchText) { text in
+            // Cleared (x or Cancel): back to the search history
+            if text.isEmpty {
+                tracks = []
+                nextHref = nil
+                hasSearched = false
+                errorMessage = nil
+            }
+        }
+        .onAppear { loadSearchHistory() }
     }
 
     // MARK: - Track List
@@ -223,21 +96,22 @@ struct SearchView: View {
         }
     }
 
-    // MARK: - Empty State (Search Recommendations, Browse Categories & History)
+    // MARK: - Search History
 
-    private var emptyStateView: some View {
-        VStack(spacing: 22) {
-            if !searchHistory.isEmpty {
-                recentSearchesSection
-            }
-
-
-            browseCategoriesSection
+    @ViewBuilder
+    private var recentSearchesSection: some View {
+        if searchHistory.isEmpty {
+            Text("Search SoundCloud for songs and artists.")
+                .font(.system(size: 14))
+                .foregroundColor(ScandiumTheme.subtext)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+        } else {
+            recentSearchesList
         }
-        .padding(.top, 4)
     }
 
-    private var recentSearchesSection: some View {
+    private var recentSearchesList: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Recent Searches")
@@ -245,9 +119,9 @@ struct SearchView: View {
                     .foregroundColor(ScandiumTheme.textPrimary)
                 Spacer()
                 Button(action: clearSearchHistory) {
-                    Text("Clear All")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(ScandiumTheme.subtext)
+                    Text("Clear")
+                        .font(.system(size: 14))
+                        .foregroundColor(ScandiumTheme.accent)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -290,7 +164,9 @@ struct SearchView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
 
-                    HairlineDivider(leadingPadding: 42)
+                    if item != searchHistory.last {
+                        HairlineDivider(leadingPadding: 42)
+                    }
                 }
             }
             .background(ScandiumTheme.surfaceDark)
@@ -299,73 +175,9 @@ struct SearchView: View {
         }
     }
 
-    private var browseCategoriesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(settings.accentColor.color)
-
-                Text("Browse Categories")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ],
-                spacing: 12
-            ) {
-                ForEach(browseCategories) { cat in
-                    Button(action: {
-                        triggerSearchKeyword(cat.query)
-                    }) {
-                        ZStack(alignment: .bottomTrailing) {
-                            LinearGradient(
-                                colors: cat.colors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-
-                            Image(systemName: cat.icon)
-                                .font(.system(size: 42, weight: .bold))
-                                .foregroundColor(Color.white.opacity(0.22))
-                                .rotationEffect(.degrees(12))
-                                .offset(x: 10, y: 10)
-
-                            VStack(alignment: .leading) {
-                                Text(cat.title)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .shadow(color: Color.black.opacity(0.35), radius: 2, x: 0, y: 1)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(12)
-                        }
-                        .frame(height: 78)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
     private func triggerSearchKeyword(_ keyword: String) {
         searchText = keyword
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         performSearch()
     }
 

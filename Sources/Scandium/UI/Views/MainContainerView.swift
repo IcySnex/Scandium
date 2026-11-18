@@ -76,6 +76,7 @@ struct MainContainerView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: library.likeSyncError)
         .onAppear {
+            settings.applyWindowTint()
             initializeClientID()
             SoundCloudAuthManager.shared.setAPI(api)
             Task {
@@ -112,7 +113,7 @@ struct MainContainerView: View {
         NavigationView {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AmbientCanvasBackground(artworkURL: player.currentTrack?.artworkURL(size: .t500x500)))
+                .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .tabItem {

@@ -11,7 +11,6 @@ struct FullPlayerView: View {
     @ObservedObject private var settings = AppSettings.shared
 
     @State private var waveformSamples: [Float] = []
-    @State private var dragProgress: Double? = nil
     @State private var showQueueSheet: Bool = false
     @State private var dragOffsetY: CGFloat = 0
 
@@ -26,12 +25,7 @@ struct FullPlayerView: View {
             let artSize = max(1, min(screenWidth - 48, screenHeight * 0.38))
 
             ZStack {
-                // True OLED black background with subtle dynamic artwork blur
-                AmbientCanvasBackground(
-                    artworkURL: player.currentTrack?.highResArtworkURL
-                )
-                .frame(width: screenWidth, height: screenHeight)
-                .clipped()
+                Color.black
 
                 VStack(spacing: 0) {
                     headerSection
@@ -92,12 +86,17 @@ struct FullPlayerView: View {
                     }
             )
         }
-        .ignoresSafeArea()
+        // Keep the header below the status bar
+        .ignoresSafeArea(edges: .bottom)
+        .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onAppear {
             loadWaveform()
         }
         .onChange(of: player.currentTrack?.id) { _ in
+            loadWaveform()
+        }
+        .onChange(of: settings.showWaveform) { _ in
             loadWaveform()
         }
         .sheet(isPresented: $showQueueSheet) {
@@ -151,7 +150,6 @@ struct FullPlayerView: View {
             height: artSize,
             cornerRadius: 12
         )
-        .shadow(color: Color.black.opacity(0.45), radius: 20, x: 0, y: 10)
     }
 
     // MARK: - 3. Track Info (Spotify Left-Aligned)
@@ -193,51 +191,10 @@ struct FullPlayerView: View {
     // MARK: - 4. Scrubber & Time Labels
 
     private var scrubberSection: some View {
-        VStack(spacing: 6) {
-            // Scrubber View (36pt height)
-            Group {
-                if settings.showWaveform && !waveformSamples.isEmpty {
-                    WaveformScrubber(
-                        samples: waveformSamples,
-                        progress: Binding(
-                            get: { dragProgress ?? player.progress },
-                            set: { dragProgress = $0 }
-                        ),
-                        bufferedProgress: player.bufferProgress,
-                        onSeek: { fraction in
-                            dragProgress = nil
-                            player.seekToFraction(fraction)
-                        }
-                    )
-                } else {
-                    SimpleProgressScrubber(
-                        progress: Binding(
-                            get: { dragProgress ?? player.progress },
-                            set: { dragProgress = $0 }
-                        ),
-                        bufferedProgress: player.bufferProgress,
-                        onSeek: { fraction in
-                            dragProgress = nil
-                            player.seekToFraction(fraction)
-                        }
-                    )
-                }
-            }
-            .frame(height: 36)
-
-            // Time Labels
-            HStack {
-                Text(player.formattedCurrentTime)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(ScandiumTheme.subtext)
-
-                Spacer()
-
-                Text(player.formattedRemainingTime)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(ScandiumTheme.subtext)
-            }
-        }
+        PlayerScrubberSection(
+            clock: player.clock,
+            samples: settings.showWaveform ? waveformSamples : []
+        )
     }
 
     // MARK: - 5. Controls Section (Centered 5-Button Cluster)
@@ -278,7 +235,6 @@ struct FullPlayerView: View {
                     Circle()
                         .fill(Color.white)
                         .frame(width: 64, height: 64)
-                        .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
 
                     Image(systemName: player.playbackState.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 26, weight: .bold))
@@ -386,7 +342,10 @@ struct FullPlayerView: View {
     // MARK: - Waveform Loading
 
     private func loadWaveform() {
-        guard let track = player.currentTrack else { return }
+        guard settings.showWaveform, let track = player.currentTrack else {
+            waveformSamples = []
+            return
+        }
         Task {
             do {
                 let samples = try await api.getWaveformData(for: track)
@@ -421,49 +380,18 @@ struct PlayerVolumeSlider: View {
 struct QueueSheetView: View {
     @EnvironmentObject var player: AudioPlayerEngine
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject private var settings = AppSettings.shared
 
     init() {}
 
     var body: some View {
-        ZStack {
-            ScandiumTheme.bgPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Queue")
-                            .font(.headline)
-                            .foregroundColor(ScandiumTheme.textPrimary)
-                        if player.isShuffleEnabled {
-                            Label("Shuffled", systemImage: "shuffle")
-                                .font(.caption)
-                                .foregroundColor(ScandiumTheme.subtext)
-                        }
-                    }
-                    Spacer()
-                    Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(ScandiumTheme.spotifyGreen)
-                    .font(.body.weight(.semibold))
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-
-                HairlineDivider()
-
+        NavigationView {
+            Group {
                 if player.queue.isEmpty {
-                    VStack(spacing: 12) {
-                        Spacer()
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 40))
-                            .foregroundColor(ScandiumTheme.subtext.opacity(0.5))
-                        Text("Queue is empty")
-                            .font(.subheadline)
-                            .foregroundColor(ScandiumTheme.subtext)
-                        Spacer()
-                    }
+                    Text("Queue is empty")
+                        .font(.subheadline)
+                        .foregroundColor(ScandiumTheme.subtext)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollViewReader { proxy in
                         List {
@@ -471,23 +399,82 @@ struct QueueSheetView: View {
                                 GlassTrackRow(
                                     track: track,
                                     isCurrentlyPlaying: index == player.currentIndex,
-                                    onTap: {
-                                        player.play(at: index)
-                                    }
+                                    onTap: { player.play(at: index) }
                                 )
                                 .id(index)
                                 .listRowBackground(Color.clear)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                             }
                         }
                         .listStyle(PlainListStyle())
-                        .onAppear {
-                            proxy.scrollTo(player.currentIndex, anchor: .top)
-                        }
+                        .onAppear { proxy.scrollTo(player.currentIndex, anchor: .top) }
                     }
                 }
             }
+            .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
+            .navigationTitle(player.isShuffleEnabled ? "Queue · Shuffled" : "Queue")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { presentationMode.wrappedValue.dismiss() }
+                }
+            }
         }
-        .preferredColorScheme(AppSettings.shared.themeMode.colorScheme)
+        .navigationViewStyle(StackNavigationViewStyle())
+        // Sheets don't inherit the app's accent on iOS 15
+        .accentColor(settings.accentColor.color)
+        .preferredColorScheme(settings.themeMode.colorScheme)
+    }
+}
+
+// MARK: - Scrubber (the only part of the player that redraws while playing)
+
+private struct PlayerScrubberSection: View {
+    @EnvironmentObject var player: AudioPlayerEngine
+    @ObservedObject var clock: PlaybackClock
+    let samples: [Float]
+
+    @State private var dragProgress: Double? = nil
+
+    private var duration: TimeInterval { player.duration }
+
+    private var progress: Double {
+        guard duration > 0 else { return 0 }
+        return min(clock.currentTime / duration, 1)
+    }
+
+    private var bufferProgress: Double {
+        guard duration > 0 else { return 0 }
+        return min(clock.bufferedTime / duration, 1)
+    }
+
+    var body: some View {
+        let binding = Binding(
+            get: { dragProgress ?? progress },
+            set: { dragProgress = $0 }
+        )
+        let seek: (Double) -> Void = { fraction in
+            dragProgress = nil
+            player.seekToFraction(fraction)
+        }
+
+        VStack(spacing: 6) {
+            Group {
+                if !samples.isEmpty {
+                    WaveformScrubber(samples: samples, progress: binding, bufferedProgress: bufferProgress, onSeek: seek)
+                } else {
+                    SimpleProgressScrubber(progress: binding, bufferedProgress: bufferProgress, onSeek: seek)
+                }
+            }
+            .frame(height: 36)
+
+            HStack {
+                Text(Track.formatDuration(clock.currentTime))
+                Spacer()
+                Text("-" + Track.formatDuration(max(0, duration - clock.currentTime)))
+            }
+            .font(.system(size: 11, weight: .regular, design: .monospaced))
+            .foregroundColor(ScandiumTheme.subtext)
+        }
     }
 }

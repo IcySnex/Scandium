@@ -10,7 +10,7 @@ struct ProfileView: View {
     @ObservedObject private var settings = AppSettings.shared
 
     @State private var showSignIn = false
-    @State private var showManualSignIn = false
+    @State private var manualSignIn: ManualSignInSheet.Mode?
     @State private var showLogOutConfirm = false
     @State private var showClearCacheConfirm = false
     @State private var toastMessage: String?
@@ -41,11 +41,19 @@ struct ProfileView: View {
                 showToast("Signed in")
             })
         }
-        .sheet(isPresented: $showManualSignIn) {
-            ManualSignInSheet(isPresented: $showManualSignIn) { message in
+        .sheet(isPresented: Binding(
+            get: { manualSignIn != nil },
+            set: { if !$0 { manualSignIn = nil } }
+        )) {
+            ManualSignInSheet(
+                mode: manualSignIn ?? .token,
+                isPresented: Binding(
+                    get: { manualSignIn != nil },
+                    set: { if !$0 { manualSignIn = nil } }
+                )
+            ) { message in
                 showToast(message)
             }
-            .accentColor(settings.accentColor.color)
         }
         .confirmationDialog("Log out of SoundCloud?", isPresented: $showLogOutConfirm, titleVisibility: .visible) {
             Button("Log Out", role: .destructive) {
@@ -83,7 +91,9 @@ struct ProfileView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(ScandiumTheme.textPrimary)
                         .lineLimit(1)
-                    Text("\(auth.userLikedTracks.count) likes · \(auth.userPlaylists.count) playlists")
+                    Text(auth.canSyncLikes
+                         ? "\(auth.userLikedTracks.count) likes · \(auth.userPlaylists.count) playlists"
+                         : "Public profile · read-only")
                         .font(.system(size: 13))
                         .foregroundColor(ScandiumTheme.subtext)
                 }
@@ -103,8 +113,12 @@ struct ProfileView: View {
                     showSignIn = true
                 }
                 SettingsDivider()
-                SettingsButtonRow(icon: "key", title: "Sign in with a token or profile link") {
-                    showManualSignIn = true
+                SettingsButtonRow(icon: "key", title: "Sign in with a token") {
+                    manualSignIn = .token
+                }
+                SettingsDivider()
+                SettingsButtonRow(icon: "link", title: "Load a public profile", subtitle: "Read-only, nothing is saved to SoundCloud") {
+                    manualSignIn = .profile
                 }
             }
         }
@@ -448,6 +462,14 @@ struct ClientIDSettingsView: View {
 
 /// Sign in by pasting an OAuth token, or link a public profile by URL.
 struct ManualSignInSheet: View {
+    enum Mode {
+        /// OAuth token: full account, likes sync both ways
+        case token
+        /// Public profile link: read-only, nothing is written to the account
+        case profile
+    }
+
+    let mode: Mode
     @Binding var isPresented: Bool
     let onDone: (String) -> Void
 
@@ -458,42 +480,48 @@ struct ManualSignInSheet: View {
         NavigationView {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Paste your OAuth token to sign in, or a soundcloud.com profile link to load a public profile.")
+                    Text(mode == .token
+                         ? "Paste the OAuth token of your SoundCloud account. Likes you add or remove here are saved to your account."
+                         : "Paste a soundcloud.com profile link to load that profile's public likes and playlists. This is read-only: likes you change here stay on this phone.")
                         .font(.system(size: 14))
                         .foregroundColor(ScandiumTheme.subtext)
 
-                    TextField("Token or profile link", text: $input)
+                    TextField(mode == .token ? "OAuth token" : "soundcloud.com/username", text: $input)
                         .font(.system(size: 15))
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .keyboardType(mode == .token ? .default : .URL)
                         .foregroundColor(ScandiumTheme.textPrimary)
                         .padding(12)
                         .background(ScandiumTheme.surfaceElevated)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                    NavigationLink(destination: OAuthTokenGuideView()) {
-                        Text("How to find your token")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(ScandiumTheme.accent)
+                    if mode == .token {
+                        NavigationLink(destination: OAuthTokenGuideView()) {
+                            Text("How to find your token")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(ScandiumTheme.accent)
+                        }
                     }
                 }
                 .padding(20)
             }
             .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
-            .navigationTitle("Sign In")
+            .navigationTitle(mode == .token ? "Sign In with Token" : "Public Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") { connect() }
+                    Button(mode == .token ? "Sign In" : "Load") { connect() }
                         .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .accentColor(ScandiumTheme.accent)
+        // Sheets don't inherit the app's accent on iOS 15
+        .accentColor(settings.accentColor.color)
         .preferredColorScheme(settings.themeMode.colorScheme)
     }
 
@@ -503,12 +531,14 @@ struct ManualSignInSheet: View {
         isPresented = false
         Task {
             let auth = SoundCloudAuthManager.shared
-            if value.contains("soundcloud.com") {
-                await auth.handleProfileURL(value)
-            } else {
+            switch mode {
+            case .token:
                 await auth.handleOAuthToken(value)
+                onDone("Signed in")
+            case .profile:
+                await auth.handleProfileURL(value)
+                onDone("Profile loaded")
             }
-            onDone("Account connected")
         }
     }
 }

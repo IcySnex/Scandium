@@ -105,7 +105,19 @@ public final class AppSettings: ObservableObject {
     }
 
     @Published public var accentColor: AppAccentColor {
-        didSet { UserDefaults.standard.set(accentColor.rawValue, forKey: "scandium_accent_color") }
+        didSet {
+            UserDefaults.standard.set(accentColor.rawValue, forKey: "scandium_accent_color")
+            applyWindowTint()
+        }
+    }
+
+    /// Alerts, action sheets, menus and sheets are drawn by UIKit and take
+    /// their tint from the window, not from SwiftUI's accent color.
+    func applyWindowTint() {
+        let tint = UIColor(accentColor.color)
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.windows.forEach { $0.tintColor = tint }
+        }
     }
 
     @Published public var autoPlayRelated: Bool {

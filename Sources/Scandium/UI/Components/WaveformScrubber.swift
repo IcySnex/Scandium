@@ -96,7 +96,6 @@ struct WaveformScrubber: View {
         RoundedRectangle(cornerRadius: 2)
             .fill(Color.white)
             .frame(width: 3, height: totalHeight + 8)
-            .shadow(color: .white.opacity(0.4), radius: 4, x: 0, y: 0)
             .offset(x: CGFloat(progress) * totalWidth - 1.5)
             .animation(.interactiveSpring(), value: progress)
     }
@@ -182,7 +181,6 @@ struct SimpleProgressScrubber: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: isDragging ? 16 : 10, height: isDragging ? 16 : 10)
-                    .shadow(color: .white.opacity(0.3), radius: 4)
                     .offset(x: CGFloat(activeProgress) * totalWidth - (isDragging ? 8 : 5))
                     .animation(.interactiveSpring(), value: isDragging)
             }

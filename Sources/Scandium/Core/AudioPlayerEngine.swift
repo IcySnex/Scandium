@@ -5,6 +5,7 @@
 // background audio session, MPNowPlayingInfoCenter updates, and MPRemoteCommandCenter handlers.
 
 import Foundation
+import UIKit
 import AVFoundation
 import MediaPlayer
 import Combine
@@ -29,9 +30,21 @@ final class AudioPlayerEngine: ObservableObject {
 
     @Published private(set) var playbackState: PlaybackState = .idle
     @Published private(set) var currentTrack: Track?
-    @Published private(set) var currentTime: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
-    @Published private(set) var bufferedTime: TimeInterval = 0
+
+    /// Position and buffer. These change twice a second while playing, so
+    /// they are published through `clock` instead of the engine: otherwise
+    /// every screen observing the engine would redraw on each tick.
+    let clock = PlaybackClock()
+    private(set) var currentTime: TimeInterval = 0 {
+        didSet { publishClock() }
+    }
+    private(set) var bufferedTime: TimeInterval = 0 {
+        didSet { publishClock() }
+    }
+    /// No clock updates while the app is in the background (nothing shows them;
+    /// the lock screen keeps time from the elapsed time and rate we hand it).
+    private var isInForeground = true
     @Published private(set) var playbackVolume: Float = 1.0
     @Published var playbackRate: Float = 1.0
 
@@ -45,7 +58,7 @@ final class AudioPlayerEngine: ObservableObject {
     /// Tracks in the order they were given (the playlist/likes order).
     private var sourceQueue: [Track] = []
     @Published var isRepeatEnabled: Bool = false
-    @Published private(set) var sleepTimerRemainingSeconds: Int = 0
+    private(set) var sleepTimerRemainingSeconds: Int = 0
 
     // MARK: - Private Properties
 
@@ -69,6 +82,16 @@ final class AudioPlayerEngine: ObservableObject {
     init(api: SoundCloudAPI) {
         self.api = api
         self.player.volume = playbackVolume
+
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in self?.isInForeground = false }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                self?.isInForeground = true
+                self?.publishClock()
+            }
+            .store(in: &cancellables)
         // Heavy setup is deliberately deferred to setupIfNeeded().
         // AVAudioSession.setActive() and MPRemoteCommandCenter must NOT be called
         // before the window is ready (i.e. before the first play() invocation).
@@ -424,6 +447,14 @@ final class AudioPlayerEngine: ObservableObject {
         }
     }
 
+    // MARK: - Clock
+
+    private func publishClock() {
+        guard isInForeground else { return }
+        if clock.currentTime != currentTime { clock.currentTime = currentTime }
+        if clock.bufferedTime != bufferedTime { clock.bufferedTime = bufferedTime }
+    }
+
     // MARK: - Buffered Time
 
     private func updateBufferedTime() {
@@ -757,4 +788,12 @@ final class AudioPlayerEngine: ObservableObject {
 /// Lets code outside the view hierarchy (e.g. the sleep timer picker) reach the engine.
 enum AudioPlayerEngineWrapper {
     static weak var sharedEngine: AudioPlayerEngine?
+}
+
+// MARK: - Playback Clock
+
+/// The playing position, observed only by the views that show it.
+final class PlaybackClock: ObservableObject {
+    @Published fileprivate(set) var currentTime: TimeInterval = 0
+    @Published fileprivate(set) var bufferedTime: TimeInterval = 0
 }

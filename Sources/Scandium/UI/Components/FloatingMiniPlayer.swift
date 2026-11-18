@@ -74,37 +74,39 @@ struct FloatingMiniPlayer: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // Bottom 2pt progress line
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 2)
-
-                        Rectangle()
-                            .fill(ScandiumTheme.spotifyGreen)
-                            .frame(width: max(0, min(geo.size.width * CGFloat(player.progress), geo.size.width)), height: 2)
-                    }
-                }
-                .frame(height: 2)
+                // Bottom 2pt progress line: the only part that redraws while playing
+                MiniPlayerProgressLine(clock: player.clock, duration: player.duration)
             }
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(ScandiumTheme.surfaceElevated.opacity(0.85))
-                }
-            )
+            // Solid fill: a live blur behind it would be re-rendered on
+            // every scroll frame
+            .background(ScandiumTheme.surfaceElevated)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(ScandiumTheme.hairline, lineWidth: 0.5)
             )
-            .shadow(color: Color.black.opacity(ScandiumTheme.isDark ? 0.5 : 0.15), radius: 12, x: 0, y: 6)
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+}
+
+private struct MiniPlayerProgressLine: View {
+    @ObservedObject var clock: PlaybackClock
+    let duration: TimeInterval
+
+    var body: some View {
+        GeometryReader { geo in
+            let fraction = duration > 0 ? min(max(clock.currentTime / duration, 0), 1) : 0
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(ScandiumTheme.hairline)
+                Rectangle()
+                    .fill(ScandiumTheme.accent)
+                    .frame(width: geo.size.width * CGFloat(fraction))
+            }
+        }
+        .frame(height: 2)
     }
 }

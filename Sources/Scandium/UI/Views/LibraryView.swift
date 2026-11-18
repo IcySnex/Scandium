@@ -45,49 +45,14 @@ struct LibraryView: View {
     init() {}
 
     var body: some View {
-        VStack(spacing: 0) {
-
-            horizontalTabsBar
-                .padding(.vertical, 10)
-
-            contentView
-        }
-        .navigationTitle("Library")
-    }
-
-    // MARK: - Horizontal Filter Tabs Bar
-
-    private var horizontalTabsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(LibraryTab.allCases) { tab in
-                    Button(action: {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            selectedTab = tab
-                        }
-                    }) {
-                        Text(tab.title(settings: settings, library: library, auth: auth))
-                            .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .medium))
-                            .foregroundColor(selectedTab == tab ? (ScandiumTheme.isDark ? .black : .white) : ScandiumTheme.textPrimary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(selectedTab == tab ? ScandiumTheme.textPrimary : ScandiumTheme.surfaceElevated)
-                            )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    // MARK: - Content
-
-    private var contentView: some View {
+        // One scroll view as the root, so the large title collapses and the
+        // bar blurs like on the other tabs.
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 12) {
+                horizontalTabsBar
+                    .padding(.horizontal, -16)
+                    .padding(.vertical, 4)
+
                 switch selectedTab {
                 case .liked:
                     likedTracksSection
@@ -102,12 +67,38 @@ struct LibraryView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 8)
             .padding(.bottom, 80)
         }
         .refreshable {
             if auth.isAuthenticated {
                 await auth.syncLibrary()
             }
+        }
+        .navigationTitle("Library")
+    }
+
+    // MARK: - Horizontal Filter Tabs Bar
+
+    private var horizontalTabsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LibraryTab.allCases) { tab in
+                    Button(action: { selectedTab = tab }) {
+                        Text(tab.title(settings: settings, library: library, auth: auth))
+                            .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .medium))
+                            .foregroundColor(selectedTab == tab ? ScandiumTheme.bgPrimary : ScandiumTheme.textPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(selectedTab == tab ? ScandiumTheme.textPrimary : ScandiumTheme.surfaceElevated)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 

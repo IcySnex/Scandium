@@ -87,7 +87,6 @@ struct GlassTrackRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(Color.black.opacity(0.001)) // Ensure full row is tappable
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
@@ -96,35 +95,9 @@ struct GlassTrackRow: View {
     // MARK: - Now Playing Indicator
 
     private var nowPlayingIndicator: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<3, id: \.self) { index in
-                NowPlayingBar(index: index)
-            }
-        }
-        .frame(width: 14, height: 14)
-    }
-}
-
-// MARK: - Animated Now Playing Bars
-
-private struct NowPlayingBar: View {
-    let index: Int
-
-    init(index: Int) {
-        self.index = index
-    }
-
-    var body: some View {
-        // Clock-driven for the same reason as ShimmerView: a repeat-forever
-        // animation would also animate the layout of the list around it on iOS 15.
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-            let period = 2 * (0.4 + Double(index) * 0.15)
-            let t = context.date.timeIntervalSinceReferenceDate / period * 2 * .pi
-            let height = 4 + 10 * CGFloat((sin(t) + 1) / 2)
-            RoundedRectangle(cornerRadius: 1)
-                .fill(ScandiumTheme.spotifyGreen)
-                .frame(width: 2.5, height: height)
-        }
-        .frame(width: 2.5, height: 14, alignment: .bottom)
+        Image(systemName: "speaker.wave.2.fill")
+            .font(.system(size: 13))
+            .foregroundColor(ScandiumTheme.accent)
+            .frame(width: 14, height: 14)
     }
 }

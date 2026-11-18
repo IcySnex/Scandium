@@ -93,69 +93,6 @@ struct SpecularBorderGradient: View {
     }
 }
 
-// MARK: - Ambient Canvas Background (True OLED Black + Subtle Soft Artwork Glow)
-
-struct AmbientCanvasBackground: View {
-    let artworkURL: URL?
-    @ObservedObject private var settings = AppSettings.shared
-    @State private var loadedImage: UIImage?
-
-    init(artworkURL: URL? = nil) {
-        self.artworkURL = artworkURL
-    }
-
-    var body: some View {
-        // The glow fades with an animation scoped to the overlay. It must never
-        // use withAnimation from onAppear: on iOS 15 that transaction also
-        // animates the first layout of the page this view sits behind, which
-        // then grows out of the top-left corner.
-        ScandiumTheme.bgPrimary
-            .overlay(
-                Group {
-                    if let image = loadedImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .blur(radius: 60)
-                            .opacity(0.18)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.35), value: loadedImage)
-            )
-            .clipped()
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .onAppear {
-                // Show what's cached right away, without animating
-                loadedImage = artworkURL.flatMap { ImageCacheStore.shared.get(for: $0) }
-                if loadedImage == nil { loadArtwork(artworkURL) }
-            }
-            .onChange(of: artworkURL?.absoluteString) { _ in
-                loadArtwork(artworkURL)
-            }
-    }
-
-    private func loadArtwork(_ url: URL?) {
-        guard let url = url else {
-            loadedImage = nil
-            return
-        }
-        if let cached = ImageCacheStore.shared.get(for: url) {
-            loadedImage = cached
-            return
-        }
-        Task {
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let image = UIImage(data: data) else { return }
-            ImageCacheStore.shared.set(image, for: url)
-            await MainActor.run {
-                if url == artworkURL { loadedImage = image }
-            }
-        }
-    }
-}
-
 // MARK: - Cached Async Image (Strictly Locked Frames & Clipped)
 
 struct CachedAsyncImage<Placeholder: View>: View {
@@ -363,32 +300,15 @@ final class ImageCacheStore {
     }
 }
 
-// MARK: - Shimmer Placeholder
+// MARK: - Loading Placeholder
 
+/// Static placeholder for images and rows that are still loading. It does
+/// not animate: on an iPhone SE every animated frame costs battery.
 struct ShimmerView: View {
     init() {}
 
     var body: some View {
-        // Drawn from the clock instead of a repeat-forever animation: on iOS 15
-        // a repeating animation started in onAppear also animates the layout of
-        // the page around it, which then slides out of the top-left corner and
-        // never settles.
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-            let cycle = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.5) / 1.5
-            let phase = CGFloat(cycle) * 1.2
-            ZStack {
-                ScandiumTheme.surfaceDark
-                LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: Color.white.opacity(0.02), location: min(1, max(0, phase - 0.25))),
-                        .init(color: Color.white.opacity(0.08), location: min(1, phase)),
-                        .init(color: Color.white.opacity(0.02), location: min(1, phase + 0.25))
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            }
-        }
+        ScandiumTheme.surfaceDark
     }
 }
 
