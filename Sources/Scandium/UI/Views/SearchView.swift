@@ -23,24 +23,24 @@ struct SearchView: View {
     init() {}
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 4) {
-                if !hasSearched && tracks.isEmpty {
-                    recentSearchesSection
-                } else if let error = errorMessage {
-                    errorView(error)
-                } else if isLoading && tracks.isEmpty {
-                    ProgressView()
-                        .padding(.top, 40)
-                } else if tracks.isEmpty {
-                    noResultsView
-                } else {
-                    trackListView
-                }
+        List {
+            if !hasSearched && tracks.isEmpty {
+                historySection
+            } else if let error = errorMessage {
+                errorRow(error)
+            } else if isLoading && tracks.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                    .plainListRow()
+            } else if tracks.isEmpty {
+                messageRow("No results. Try a different song or artist.")
+            } else {
+                resultRows
             }
-            .padding(.top, 8)
-            .padding(.bottom, 80)
+            MiniPlayerSpacerRow()
         }
+        .listStyle(PlainListStyle())
         .navigationTitle("Search")
         // The system search field in the navigation bar
         .searchable(
@@ -62,116 +62,54 @@ struct SearchView: View {
         .onAppear { loadSearchHistory() }
     }
 
-    // MARK: - Track List
+    // MARK: - Results
 
     @ViewBuilder
-    private var trackListView: some View {
+    private var resultRows: some View {
         ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
             GlassTrackRow(
                 track: track,
                 isCurrentlyPlaying: player.currentTrack?.id == track.id,
-                showLikeButton: true,
-                onTap: {
-                    player.playQueue(tracks, startingAt: index)
-                }
+                onTap: { player.playQueue(tracks, startingAt: index) }
             )
-
-            if index == tracks.count - 3 && nextHref != nil && !isLoadingMore {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        loadMoreResults()
-                    }
+            .plainListRow()
+            .onAppear {
+                // Load the next page shortly before the end
+                if index == tracks.count - 3 { loadMoreResults() }
             }
         }
-
         if isLoadingMore {
-            HStack {
-                Spacer()
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.textPrimary))
-                    .padding(.vertical, 16)
-                Spacer()
-            }
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .plainListRow()
         }
     }
 
     // MARK: - Search History
 
     @ViewBuilder
-    private var recentSearchesSection: some View {
+    private var historySection: some View {
         if searchHistory.isEmpty {
-            Text("Search SoundCloud for songs and artists.")
-                .font(.system(size: 14))
-                .foregroundColor(ScandiumTheme.subtext)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 40)
+            messageRow("Search SoundCloud for songs and artists.")
         } else {
-            recentSearchesList
-        }
-    }
-
-    private var recentSearchesList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            Section(header: HStack {
                 Text("Recent Searches")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
                 Spacer()
-                Button(action: clearSearchHistory) {
-                    Text("Clear")
-                        .font(.system(size: 14))
-                        .foregroundColor(ScandiumTheme.accent)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-
-            VStack(spacing: 0) {
+                Button("Clear", action: clearSearchHistory)
+                    .font(.subheadline)
+            }) {
                 ForEach(searchHistory, id: \.self) { item in
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            triggerSearchKeyword(item)
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(ScandiumTheme.subtext)
-
-                                Text(item)
-                                    .font(.system(size: 15, weight: .regular))
-                                    .foregroundColor(ScandiumTheme.textPrimary)
-                                    .lineLimit(1)
-
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-
-                        Button(action: {
-                            removeSearchHistoryItem(item)
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(ScandiumTheme.subtext.opacity(0.8))
-                                .frame(width: 32, height: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-
-                    if item != searchHistory.last {
-                        HairlineDivider(leadingPadding: 42)
+                    Button(action: { triggerSearchKeyword(item) }) {
+                        Label(item, systemImage: "clock.arrow.circlepath")
+                            .foregroundColor(.primary)
                     }
                 }
+                // Swipe left to delete an entry
+                .onDelete { offsets in
+                    offsets.map { searchHistory[$0] }.forEach(removeSearchHistoryItem)
+                }
             }
-            .background(ScandiumTheme.surfaceDark)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .padding(.horizontal, 16)
         }
     }
 
@@ -181,60 +119,32 @@ struct SearchView: View {
         performSearch()
     }
 
-    // MARK: - No Results
+    // MARK: - Messages
 
-    private var noResultsView: some View {
-        VStack(spacing: 12) {
-            Spacer().frame(height: 50)
-
-            Image(systemName: "music.note.list")
-                .font(.system(size: 38, weight: .light))
-                .foregroundColor(ScandiumTheme.subtext.opacity(0.4))
-
-            Text("No results found")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(ScandiumTheme.textPrimary)
-
-            Text("Try searching for a different song or artist.")
-                .font(.system(size: 13))
-                .foregroundColor(ScandiumTheme.subtext)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+    private func messageRow(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 32)
+            .padding(.top, 40)
+            .plainListRow()
     }
 
-    // MARK: - Error View
-
-    private func errorView(_ message: String) -> some View {
+    private func errorRow(_ message: String) -> some View {
         VStack(spacing: 12) {
-            Spacer().frame(height: 30)
-
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 34, weight: .light))
-                .foregroundColor(Color.orange)
-
-            Text("Unable to load results")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(ScandiumTheme.textPrimary)
-
-            Text(message)
-                .font(.system(size: 13))
-                .foregroundColor(ScandiumTheme.subtext)
+            Text("Couldn't search: \(message)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-
-            Button(action: performSearch) {
-                Text("Retry")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 8)
-                    .background(ScandiumTheme.surfaceElevated)
-                    .clipShape(Capsule())
-            }
+            Button("Retry", action: performSearch)
+                .buttonStyle(BorderedButtonStyle())
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 32)
+        .padding(.top, 40)
+        .plainListRow()
     }
 
     // MARK: - Search Actions

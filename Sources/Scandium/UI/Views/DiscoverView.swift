@@ -218,18 +218,11 @@ struct DiscoverView: View {
                 .foregroundColor(ScandiumTheme.subtext)
                 .lineLimit(nil)
 
-            Button(action: {
+            Button("Retry") {
                 Task { await store.reload(api: api) }
-            }) {
-                Text("Retry")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(ScandiumTheme.spotifyGreen)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(BorderedButtonStyle())
+            .controlSize(.small)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

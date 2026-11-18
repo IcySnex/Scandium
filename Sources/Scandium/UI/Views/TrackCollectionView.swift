@@ -37,42 +37,45 @@ struct TrackCollectionView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                header
+        List {
+            header
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .plainListRow()
 
-                if !tracks.isEmpty {
-                    PlayShuffleButtons(tracks: tracks)
-                }
+            if !tracks.isEmpty {
+                PlayShuffleButtons(tracks: tracks)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                    .plainListRow()
+            }
 
-                if isLoading && tracks.isEmpty {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: ScandiumTheme.accent))
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 30)
-                } else if loadFailed && tracks.isEmpty {
-                    Text("Couldn't load tracks.")
-                        .font(.system(size: 13))
-                        .foregroundColor(ScandiumTheme.subtext)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 30)
-                } else {
-                    LazyVStack(spacing: 4) {
-                        ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
-                            GlassTrackRow(
-                                track: track,
-                                isCurrentlyPlaying: player.currentTrack?.id == track.id,
-                                onTap: { player.playQueue(tracks, startingAt: index) }
-                            )
-                        }
-                    }
+            if isLoading && tracks.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 30)
+                    .plainListRow()
+            } else if loadFailed && tracks.isEmpty {
+                Text("Couldn't load tracks.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 30)
+                    .plainListRow()
+            } else {
+                ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                    GlassTrackRow(
+                        track: track,
+                        isCurrentlyPlaying: player.currentTrack?.id == track.id,
+                        onTap: { player.playQueue(tracks, startingAt: index) }
+                    )
+                    .plainListRow()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 80)
+
+            MiniPlayerSpacerRow()
         }
-        .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
+        .listStyle(PlainListStyle())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadTracks() }
@@ -174,27 +177,25 @@ struct PlayShuffleButtons: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            button(icon: "play.fill", title: "Play All", primary: true) {
-                player.playQueue(tracks, shuffle: false)
+            Button(action: { player.playQueue(tracks, shuffle: false) }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                    Text("Play All")
+                }
+                .frame(maxWidth: .infinity)
             }
-            button(icon: "shuffle", title: "Shuffle", primary: false) {
-                player.playQueue(tracks, shuffle: true)
-            }
-        }
-    }
+            .buttonStyle(BorderedProminentButtonStyle())
 
-    private func button(icon: String, title: String, primary: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 13, weight: .bold))
-                Text(title).font(.system(size: 14, weight: .semibold))
+            Button(action: { player.playQueue(tracks, shuffle: true) }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "shuffle")
+                    Text("Shuffle")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .foregroundColor(primary ? .white : ScandiumTheme.textPrimary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .background(primary ? ScandiumTheme.accent : ScandiumTheme.surfaceElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .buttonStyle(BorderedButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .font(.subheadline.weight(.semibold))
+        .controlSize(.large)
     }
 }

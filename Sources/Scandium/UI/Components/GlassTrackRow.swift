@@ -99,6 +99,16 @@ struct GlassTrackRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        // Swipe left to like / unlike (only inside a List)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if showLikeButton && auth.canSyncLikes {
+                let isLiked = library.isLiked(track: track)
+                Button(action: { library.toggleLike(track: track) }) {
+                    Label(isLiked ? "Unlike" : "Like", systemImage: isLiked ? "heart.slash.fill" : "heart.fill")
+                }
+                .tint(.accentColor)
+            }
+        }
     }
 
     // MARK: - Now Playing Indicator
@@ -107,5 +117,27 @@ struct GlassTrackRow: View {
         Image(systemName: "speaker.wave.2.fill")
             .font(.system(size: 13))
             .foregroundColor(ScandiumTheme.accent)
+    }
+}
+
+// MARK: - List Helpers
+
+extension View {
+    /// A full-width row in a plain List: the row draws its own padding and
+    /// there are no separators (iOS 15 can't inset them to the text).
+    func plainListRow() -> some View {
+        self
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+    }
+}
+
+/// Last row of a list, so its end isn't hidden behind the mini player.
+struct MiniPlayerSpacerRow: View {
+    var body: some View {
+        Color.clear
+            .frame(height: 72)
+            .plainListRow()
+            .listRowBackground(Color.clear)
     }
 }
