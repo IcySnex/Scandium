@@ -105,9 +105,10 @@ struct AmbientCanvasBackground: View {
     }
 
     var body: some View {
-        // The glow is an overlay on a view that always fills its parent, so it
-        // can't animate its size (which made it grow out of the top-left
-        // corner); only its opacity fades in and out.
+        // The glow fades with an animation scoped to the overlay. It must never
+        // use withAnimation from onAppear: on iOS 15 that transaction also
+        // animates the first layout of the page this view sits behind, which
+        // then grows out of the top-left corner.
         ScandiumTheme.bgPrimary
             .overlay(
                 Group {
@@ -120,12 +121,15 @@ struct AmbientCanvasBackground: View {
                             .transition(.opacity)
                     }
                 }
+                .animation(.easeInOut(duration: 0.35), value: loadedImage)
             )
             .clipped()
             .ignoresSafeArea()
             .allowsHitTesting(false)
             .onAppear {
-                loadArtwork(artworkURL)
+                // Show what's cached right away, without animating
+                loadedImage = artworkURL.flatMap { ImageCacheStore.shared.get(for: $0) }
+                if loadedImage == nil { loadArtwork(artworkURL) }
             }
             .onChange(of: artworkURL?.absoluteString) { _ in
                 loadArtwork(artworkURL)
@@ -134,32 +138,19 @@ struct AmbientCanvasBackground: View {
 
     private func loadArtwork(_ url: URL?) {
         guard let url = url else {
-            withAnimation(.easeOut(duration: 0.3)) {
-                self.loadedImage = nil
-            }
+            loadedImage = nil
             return
         }
-
         if let cached = ImageCacheStore.shared.get(for: url) {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                self.loadedImage = cached
-            }
+            loadedImage = cached
             return
         }
-
         Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let image = UIImage(data: data) {
-                    ImageCacheStore.shared.set(image, for: url)
-                    await MainActor.run {
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            self.loadedImage = image
-                        }
-                    }
-                }
-            } catch {
-                // Silently fallback to pure black
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = UIImage(data: data) else { return }
+            ImageCacheStore.shared.set(image, for: url)
+            await MainActor.run {
+                if url == artworkURL { loadedImage = image }
             }
         }
     }
@@ -216,6 +207,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     }
             }
         }
+        .animation(.easeIn(duration: 0.2), value: loadedImage)
         .onAppear {
             if loadedImage == nil {
                 loadImage()
@@ -266,9 +258,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
             if let img = fetchedImage {
                 ImageCacheStore.shared.set(img, for: url)
                 await MainActor.run {
-                    withAnimation(.easeIn(duration: 0.2)) {
-                        self.loadedImage = img
-                    }
+                    self.loadedImage = img
                     self.isLoading = false
                 }
             } else {
@@ -376,29 +366,27 @@ final class ImageCacheStore {
 // MARK: - Shimmer Placeholder
 
 struct ShimmerView: View {
-    @State private var phase: CGFloat = 0
-
     init() {}
 
     var body: some View {
-        ZStack {
-            ScandiumTheme.surfaceDark
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.white.opacity(0.02), location: max(0, phase - 0.25)),
-                    .init(color: Color.white.opacity(0.08), location: phase),
-                    .init(color: Color.white.opacity(0.02), location: min(1, phase + 0.25))
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
-        .onAppear {
-            withAnimation(
-                .linear(duration: 1.5)
-                .repeatForever(autoreverses: false)
-            ) {
-                phase = 1.2
+        // Drawn from the clock instead of a repeat-forever animation: on iOS 15
+        // a repeating animation started in onAppear also animates the layout of
+        // the page around it, which then slides out of the top-left corner and
+        // never settles.
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let cycle = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.5) / 1.5
+            let phase = CGFloat(cycle) * 1.2
+            ZStack {
+                ScandiumTheme.surfaceDark
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: Color.white.opacity(0.02), location: min(1, max(0, phase - 0.25))),
+                        .init(color: Color.white.opacity(0.08), location: min(1, phase)),
+                        .init(color: Color.white.opacity(0.02), location: min(1, phase + 0.25))
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
             }
         }
     }

@@ -109,23 +109,22 @@ struct GlassTrackRow: View {
 
 private struct NowPlayingBar: View {
     let index: Int
-    @State private var height: CGFloat = 4
 
     init(index: Int) {
         self.index = index
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 1)
-            .fill(ScandiumTheme.spotifyGreen)
-            .frame(width: 2.5, height: height)
-            .onAppear {
-                withAnimation(
-                    .easeInOut(duration: 0.4 + Double(index) * 0.15)
-                    .repeatForever(autoreverses: true)
-                ) {
-                    height = CGFloat.random(in: 6...14)
-                }
-            }
+        // Clock-driven for the same reason as ShimmerView: a repeat-forever
+        // animation would also animate the layout of the list around it on iOS 15.
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let period = 2 * (0.4 + Double(index) * 0.15)
+            let t = context.date.timeIntervalSinceReferenceDate / period * 2 * .pi
+            let height = 4 + 10 * CGFloat((sin(t) + 1) / 2)
+            RoundedRectangle(cornerRadius: 1)
+                .fill(ScandiumTheme.spotifyGreen)
+                .frame(width: 2.5, height: height)
+        }
+        .frame(width: 2.5, height: 14, alignment: .bottom)
     }
 }
