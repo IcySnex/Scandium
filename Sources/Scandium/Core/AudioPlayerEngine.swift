@@ -45,6 +45,8 @@ final class AudioPlayerEngine: ObservableObject {
     /// No clock updates while the app is in the background (nothing shows them;
     /// the lock screen keeps time from the elapsed time and rate we hand it).
     private var isInForeground = true
+    /// Set while a seek is in progress
+    private var seekTarget: TimeInterval?
     @Published private(set) var playbackVolume: Float = 1.0
     @Published var playbackRate: Float = 1.0
 
@@ -141,7 +143,7 @@ final class AudioPlayerEngine: ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
             let seconds = CMTimeGetSeconds(time)
-            if seconds.isFinite && seconds >= 0 {
+            if seconds.isFinite && seconds >= 0 && self.seekTarget == nil {
                 self.currentTime = seconds
             }
             self.updateBufferedTime()
@@ -158,6 +160,7 @@ final class AudioPlayerEngine: ObservableObject {
             guard let self = self else { return }
             self.currentTrack = track
             self.playbackState = .loading
+            self.seekTarget = nil
             self.currentTime = 0
             self.duration = track.durationInSeconds
             self.bufferedTime = 0
@@ -345,13 +348,17 @@ final class AudioPlayerEngine: ObservableObject {
     }
     /// Seeks to a specific time in seconds.
     func seek(to time: TimeInterval) {
+        // Show the target position right away, and ignore the player's old
+        // position until the seek is done, so a scrubber doesn't jump back.
+        seekTarget = time
+        currentTime = time
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
-            if finished {
-                DispatchQueue.main.async {
-                    self?.currentTime = time
-                    self?.updateNowPlayingElapsedTime()
-                }
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self, self.seekTarget == time else { return } // a newer seek is running
+                self.seekTarget = nil
+                self.currentTime = time
+                self.updateNowPlayingElapsedTime()
             }
         }
     }

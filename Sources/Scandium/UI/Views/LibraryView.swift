@@ -35,9 +35,12 @@ struct LibraryView: View {
     @EnvironmentObject var player: AudioPlayerEngine
     @ObservedObject private var auth = SoundCloudAuthManager.shared
 
-    @State private var selectedTab: LibraryTab = .liked
+    /// Owned by the tab container, so the Home shortcut can pick a section
+    @Binding var selectedTab: LibraryTab
 
-    init() {}
+    init(selection: Binding<LibraryTab>) {
+        _selectedTab = selection
+    }
 
     var body: some View {
         List {

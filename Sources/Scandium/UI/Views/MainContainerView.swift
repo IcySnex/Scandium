@@ -37,6 +37,8 @@ struct MainContainerView: View {
 
     @State private var selectedTab: ScandiumTab = .home
     @State private var showFullPlayer: Bool = false
+    @State private var librarySection: LibraryTab = .liked
+    @State private var libraryStackID = UUID()
 
     init() {}
 
@@ -45,10 +47,12 @@ struct MainContainerView: View {
         // position alive and handles safe areas and bar layout itself.
         TabView(selection: $selectedTab) {
             tabStack(.home) {
-                DiscoverView(onNavigateToLibrary: { selectedTab = .library })
+                DiscoverView(onNavigateToLibrary: showLikedSongs)
             }
             tabStack(.search) { SearchView() }
-            tabStack(.library) { LibraryView() }
+            tabStack(.library) { LibraryView(selection: $librarySection) }
+                // A new id resets the Library stack to its first page
+                .id(libraryStackID)
             tabStack(.profile) { ProfileView() }
         }
         .overlay(alignment: .bottom) {
@@ -85,6 +89,13 @@ struct MainContainerView: View {
                 await SoundCloudAuthManager.shared.syncOnLaunchIfNeeded()
             }
         }
+    }
+
+    /// Home's Liked Songs shortcut: Library tab, Liked Songs, first page
+    private func showLikedSongs() {
+        librarySection = .liked
+        libraryStackID = UUID()
+        selectedTab = .library
     }
 
     // MARK: - Like Sync Error Banner
