@@ -309,7 +309,7 @@ private struct PlayerScrubberSection: View {
                 if !samples.isEmpty {
                     WaveformScrubber(samples: samples, progress: binding, bufferedProgress: bufferProgress, onSeek: seek)
                 } else {
-                    SimpleProgressScrubber(progress: binding, bufferedProgress: bufferProgress, onSeek: seek)
+                    SimpleProgressScrubber(progress: binding, onSeek: seek)
                 }
             }
             .frame(height: 36)

@@ -140,66 +140,19 @@ struct WaveformScrubber: View {
     }
 }
 
-// MARK: - Simple Progress Scrubber (Fallback without waveform data)
+// MARK: - Progress Slider (when the waveform is off or unavailable)
 
+/// The system slider. While dragging, the parent keeps the dragged value
+/// (through `progress`), and the seek happens once the finger lifts.
 struct SimpleProgressScrubber: View {
     @Binding var progress: Double
-    let bufferedProgress: Double
     let onSeek: (Double) -> Void
 
-    @State private var isDragging: Bool = false
-    @State private var dragProgress: Double = 0
-
-    init(
-        progress: Binding<Double>,
-        bufferedProgress: Double,
-        onSeek: @escaping (Double) -> Void
-    ) {
-        self._progress = progress
-        self.bufferedProgress = bufferedProgress
-        self.onSeek = onSeek
-    }
-
     var body: some View {
-        GeometryReader { geometry in
-            let totalWidth = geometry.size.width
-            let activeProgress = isDragging ? dragProgress : progress
-
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(height: 4)
-
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.primary.opacity(0.08))
-                    .frame(width: CGFloat(bufferedProgress) * totalWidth, height: 4)
-
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.primary)
-                    .frame(width: CGFloat(activeProgress) * totalWidth, height: 4)
-
-                Circle()
-                    .fill(Color.primary)
-                    .frame(width: isDragging ? 16 : 10, height: isDragging ? 16 : 10)
-                    .offset(x: CGFloat(activeProgress) * totalWidth - (isDragging ? 8 : 5))
-                    .animation(.interactiveSpring(), value: isDragging)
-            }
-            .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let fraction = max(0, min(1, Double(value.location.x / totalWidth)))
-                        isDragging = true
-                        dragProgress = fraction
-                    }
-                    .onEnded { value in
-                        let fraction = max(0, min(1, Double(value.location.x / totalWidth)))
-                        isDragging = false
-                        onSeek(fraction)
-                    }
-            )
-        }
-        .frame(height: 30)
+        Slider(value: $progress, in: 0...1, onEditingChanged: { isEditing in
+            if !isEditing { onSeek(progress) }
+        })
+        .accentColor(.secondary)
+        .accessibilityLabel("Playback position")
     }
 }
