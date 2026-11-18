@@ -149,11 +149,6 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         TimeInterval(duration) / 1000.0
     }
 
-    /// Full duration in seconds (for tracks with intros/outros), falls back to `duration`.
-    var fullDurationInSeconds: TimeInterval {
-        TimeInterval(fullDuration ?? duration) / 1000.0
-    }
-
     /// Human-readable duration string (e.g., "3:45" or "1:02:30").
     var formattedDuration: String {
         Self.formatDuration(durationInSeconds)

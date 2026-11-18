@@ -6,10 +6,6 @@ import SwiftUI
 // MARK: - Design Tokens
 
 enum ScandiumTheme {
-    static var isDark: Bool {
-        AppSettings.shared.isDark
-    }
-
     // iOS system colors: they match the platform in light and dark mode and
     // resolve against the current trait, so every view updates at once when
     // the theme changes.
@@ -22,7 +18,6 @@ enum ScandiumTheme {
     static let subtext = Color(UIColor.secondaryLabel)
 
     static let hairline = Color(UIColor.separator)
-    static let hairlinewidth: CGFloat = 0.5
 
     // Accents
     /// Follows the `.accentColor` set at the root (and on presented
@@ -30,34 +25,10 @@ enum ScandiumTheme {
     static var accent: Color {
         Color.accentColor
     }
-    static var spotifyGreen: Color {
-        accent
-    }
 
     // Dimensions
     static let cornerRadiusSmall: CGFloat = 6
-    static let cornerRadiusMedium: CGFloat = 8
-    static let cornerRadiusCard: CGFloat = 12
-    static let cornerRadiusLarge: CGFloat = 16
     static let tabBarHeight: CGFloat = 49
-}
-
-
-// MARK: - Hairline Divider
-
-struct HairlineDivider: View {
-    var leadingPadding: CGFloat = 0
-
-    init(leadingPadding: CGFloat = 0) {
-        self.leadingPadding = leadingPadding
-    }
-
-    var body: some View {
-        Rectangle()
-            .fill(ScandiumTheme.hairline)
-            .frame(height: ScandiumTheme.hairlinewidth)
-            .padding(.leading, leadingPadding)
-    }
 }
 
 // MARK: - Cached Async Image

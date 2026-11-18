@@ -648,11 +648,6 @@ final class AudioPlayerEngine: ObservableObject {
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackState.isPlaying ? 1.0 : 0.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
-
-    private func clearNowPlayingInfo() {
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-    }
-
     // MARK: - Artwork Fetching for Now Playing
 
     private func fetchArtworkForNowPlaying(track: Track) {

@@ -49,7 +49,7 @@ struct FloatingMiniPlayer: View {
                                 let isLiked = library.isLiked(track: track)
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 17, weight: .medium))
-                                    .foregroundColor(isLiked ? ScandiumTheme.spotifyGreen : ScandiumTheme.subtext)
+                                    .foregroundColor(isLiked ? ScandiumTheme.accent : ScandiumTheme.subtext)
                             }
                             .buttonStyle(PlainButtonStyle())
                             .disabled(!auth.canSyncLikes)

@@ -182,19 +182,4 @@ public final class AppSettings: ObservableObject {
     }
 
     // MARK: - Dark Mode Detection
-
-    public var isDark: Bool {
-        switch themeMode {
-        case .dark:
-            return true
-        case .light:
-            return false
-        case .system:
-            if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-               let keyWindow = scene.windows.first(where: { $0.isKeyWindow }) {
-                return keyWindow.traitCollection.userInterfaceStyle != .light
-            }
-            return UITraitCollection.current.userInterfaceStyle != .light
-        }
-    }
 }

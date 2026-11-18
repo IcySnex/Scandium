@@ -43,7 +43,7 @@ struct GlassTrackRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(track.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(isCurrentlyPlaying ? ScandiumTheme.spotifyGreen : ScandiumTheme.textPrimary)
+                        .foregroundColor(isCurrentlyPlaying ? ScandiumTheme.accent : ScandiumTheme.textPrimary)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -73,7 +73,7 @@ struct GlassTrackRow: View {
                         Button(action: { library.toggleLike(track: track) }) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(isLiked ? ScandiumTheme.spotifyGreen : ScandiumTheme.subtext.opacity(0.5))
+                                .foregroundColor(isLiked ? ScandiumTheme.accent : ScandiumTheme.subtext.opacity(0.5))
                                 .frame(width: 32, height: 32)
                         }
                         .buttonStyle(PlainButtonStyle())

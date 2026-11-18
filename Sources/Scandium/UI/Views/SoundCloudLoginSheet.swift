@@ -29,7 +29,7 @@ struct SoundCloudLoginSheet: View {
                 if isLoading {
                     VStack(spacing: 0) {
                         ProgressView(value: progress, total: 1.0)
-                            .progressViewStyle(LinearProgressViewStyle(tint: ScandiumTheme.spotifyGreen))
+                            .progressViewStyle(LinearProgressViewStyle(tint: ScandiumTheme.accent))
                             .frame(height: 3)
                         Spacer()
                     }

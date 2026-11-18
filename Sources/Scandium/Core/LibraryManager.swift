@@ -147,7 +147,6 @@ final class LibraryManager: ObservableObject {
         localEdits[track.id] = nil
         saveLikedTracks()
 
-        let settings = AppSettings.shared
         likeSyncError = liked
             ? "Couldn't like this track on SoundCloud"
             : "Couldn't unlike this track on SoundCloud"

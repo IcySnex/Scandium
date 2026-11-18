@@ -16,7 +16,6 @@ struct DiscoverView: View {
     let onNavigateToLibrary: () -> Void
 
     @ObservedObject private var store = DiscoverDataStore.shared
-    @ObservedObject private var settings = AppSettings.shared
 
     private static let cardSize: CGFloat = 148
 
