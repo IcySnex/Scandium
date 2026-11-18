@@ -36,6 +36,34 @@ public enum AppThemeMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which of SoundCloud's streams to prefer
+public enum AudioQuality: String, CaseIterable, Identifiable {
+    /// The smallest stream: 128 kbps MP3 where offered, else 96 kbps AAC
+    case standard
+    /// 160 kbps AAC
+    case high
+    /// 256 kbps AAC for SoundCloud Go+ accounts, else 160 kbps
+    case best
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .standard: return "Standard"
+        case .high: return "High"
+        case .best: return "Best"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .standard: return "96–128 kbps"
+        case .high: return "160 kbps"
+        case .best: return "256 kbps with Go+"
+        }
+    }
+}
+
 public enum AppAccentColor: String, CaseIterable, Identifiable {
     // Orange (the default) comes first in the accent picker
     case orange
@@ -144,9 +172,8 @@ public final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(showWaveform, forKey: "scandium_show_waveform") }
     }
 
-    /// Prefer 160 kbps AAC (256 kbps with Go+) over the smaller standard stream
-    @Published public var highQualityAudio: Bool {
-        didSet { UserDefaults.standard.set(highQualityAudio, forKey: "scandium_high_quality_audio") }
+    @Published public var audioQuality: AudioQuality {
+        didSet { UserDefaults.standard.set(audioQuality.rawValue, forKey: "scandium_stream_quality") }
     }
 
     @Published public var enableHaptics: Bool {
@@ -169,8 +196,12 @@ public final class AppSettings: ObservableObject {
         autoSkipOnError = defaults.object(forKey: "scandium_auto_skip_on_error") as? Bool ?? true
         // Off by default: the system slider; the waveform is optional
         showWaveform = defaults.object(forKey: "scandium_show_waveform") as? Bool ?? false
-        // Off by default: the smaller stream costs less battery and data
-        highQualityAudio = defaults.bool(forKey: "scandium_high_quality_audio")
+        // Standard by default: the smallest stream costs the least data and battery.
+        // 2.2.5 stored an on/off "High Quality Audio" flag; carry it over.
+        let legacyHighQuality = defaults.bool(forKey: "scandium_high_quality_audio")
+        defaults.removeObject(forKey: "scandium_high_quality_audio")
+        audioQuality = AudioQuality(rawValue: defaults.string(forKey: "scandium_stream_quality") ?? "")
+            ?? (legacyHighQuality ? .high : .standard)
         enableHaptics = defaults.object(forKey: "scandium_enable_haptics") as? Bool ?? true
 
         if keepScreenAwake {

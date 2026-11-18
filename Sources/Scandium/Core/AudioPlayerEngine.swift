@@ -178,7 +178,7 @@ final class AudioPlayerEngine: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.playbackState = .failed(error.localizedDescription)
+                    self.failCurrentTrack(error.localizedDescription)
                 }
             }
         }
@@ -202,14 +202,22 @@ final class AudioPlayerEngine: ObservableObject {
     ///     it off ("Play All"), `nil` keeps the current mode (tapping a track).
     ///     With shuffle on, the starting track plays first and the rest follow
     ///     in random order.
-    func playQueue(_ tracks: [Track], startingAt index: Int? = nil, shuffle: Bool? = nil) {
+    func playQueue(_ allTracks: [Track], startingAt index: Int? = nil, shuffle: Bool? = nil) {
+        // Tracks that can't be played (DRM-only) never enter the queue. The
+        // start index refers to `allTracks`; map it to the first playable
+        // track at or after it.
+        let tracks = allTracks.filter(\.isPlayable)
         guard !tracks.isEmpty else { return }
         if let shuffle = shuffle {
             isShuffleEnabled = shuffle
         }
         sourceQueue = tracks
 
-        let start = index.map { max(0, min($0, tracks.count - 1)) }
+        let start: Int? = index.map { requested in
+            let clamped = max(0, min(requested, allTracks.count - 1))
+            let next = allTracks[clamped...].first(where: \.isPlayable)
+            return next.flatMap { track in tracks.firstIndex { $0.id == track.id } } ?? 0
+        }
         if isShuffleEnabled {
             let first = start ?? Int.random(in: 0..<tracks.count)
             queue = Self.shuffled(tracks, keepingFirst: first)
@@ -262,8 +270,7 @@ final class AudioPlayerEngine: ObservableObject {
                         self.duration = itemDuration
                     }
                 case .failed:
-                    let errorMsg = item.error?.localizedDescription ?? "Playback failed"
-                    self.playbackState = .failed(errorMsg)
+                    self.failCurrentTrack(item.error?.localizedDescription ?? "Playback failed")
                 default:
                     break
                 }
@@ -427,6 +434,7 @@ final class AudioPlayerEngine: ObservableObject {
 
     /// Appends a track to the end of the queue.
     func enqueue(_ track: Track) {
+        guard track.isPlayable else { return }
         queue.append(track)
         sourceQueue.append(track)
     }
@@ -521,14 +529,21 @@ final class AudioPlayerEngine: ObservableObject {
                 }
             }
         }
-        self.playbackState = .failed(message)
+        failCurrentTrack(message)
+    }
 
-        // Auto-skip on stream error if configured and queue has more songs
-        if AppSettings.shared.autoSkipOnError && !queue.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                guard let self = self, case .failed = self.playbackState else { return }
-                self.nextTrack()
-            }
+    /// Marks the current track as failed and, with "Skip Tracks That Fail to
+    /// Play" on, moves to the next one, for every kind of failure: the stream
+    /// couldn't be resolved, couldn't be loaded, or stopped mid-way.
+    private func failCurrentTrack(_ message: String) {
+        playbackState = .failed(message)
+        guard AppSettings.shared.autoSkipOnError,
+              currentIndex + 1 < queue.count || isRepeatEnabled else { return }
+        let failedID = currentTrack?.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self = self, case .failed = self.playbackState,
+                  self.currentTrack?.id == failedID else { return }
+            self.nextTrack()
         }
     }
 

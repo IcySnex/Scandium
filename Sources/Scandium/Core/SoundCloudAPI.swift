@@ -382,8 +382,8 @@ final class SoundCloudAPI: ObservableObject {
     }
 
     /// Resolves the direct stream URL for a track.
-    /// Standard quality prefers the smallest stream (128 kbps MP3, else 96 kbps
-    /// AAC); High Quality prefers 160 kbps AAC, or 256 kbps with Go+.
+    /// Standard prefers the smallest stream (128 kbps MP3, else 96 kbps AAC);
+    /// High prefers 160 kbps AAC; Best tries Go+ 256 kbps first.
     func resolveStreamURL(for track: Track) async throws -> URL {
         guard let transcodings = track.media?.transcodings, !transcodings.isEmpty else {
             throw APIError.noTranscodings
@@ -393,18 +393,18 @@ final class SoundCloudAPI: ObservableObject {
         let playable = transcodings.filter { $0.isProgressive || $0.isHLS }
         guard !playable.isEmpty else { throw APIError.noStreamURL }
 
-        let preferHighQuality = AppSettings.shared.highQualityAudio
+        let quality = AppSettings.shared.audioQuality
         let token = SoundCloudAuthManager.shared.oauthToken
         let sorted = playable.sorted {
-            transcodingPriority($0, preferHighQuality: preferHighQuality)
-                > transcodingPriority($1, preferHighQuality: preferHighQuality)
+            transcodingPriority($0, quality: quality) > transcodingPriority($1, quality: quality)
         }
 
         var lastError: Error = APIError.noStreamURL
         for transcoding in sorted {
             let isGoPlus = transcoding.quality == "hq"
-            // Go+ streams need the track's authorization and a signed-in account
-            if isGoPlus && (track.trackAuthorization == nil || token == nil) { continue }
+            // Go+ streams: only for "Best", and they need the track's
+            // authorization and a signed-in account
+            if isGoPlus && (quality != .best || track.trackAuthorization == nil || token == nil) { continue }
             do {
                 return try await fetchStreamURL(
                     from: transcoding,
@@ -423,7 +423,7 @@ final class SoundCloudAPI: ObservableObject {
     /// Ranks the stream formats SoundCloud offers for a track. Presets seen:
     /// mp3 (128 kbps, progressive or HLS), aac_96k, aac_160k, abr_sq
     /// (adaptive AAC), Go+ "hq" AAC 256 kbps, and Ogg Opus.
-    private func transcodingPriority(_ transcoding: Transcoding, preferHighQuality: Bool) -> Int {
+    private func transcodingPriority(_ transcoding: Transcoding, quality: AudioQuality) -> Int {
         let mime = transcoding.format.mimeType
         // AVPlayer can't play Ogg Opus; keep it as a last resort only
         if mime.contains("ogg") || mime.contains("opus") { return 0 }
@@ -433,7 +433,7 @@ final class SoundCloudAPI: ObservableObject {
         let isMP3 = mime.hasPrefix("audio/mpeg") && !mime.contains("mpegurl")
         let isGoPlus = transcoding.quality == "hq"
         var score = 0
-        if preferHighQuality {
+        if quality != .standard {
             if isGoPlus { score += 1000 }
             if preset.contains("160") { score += 500 }
             else if preset.hasPrefix("abr") { score += 400 }

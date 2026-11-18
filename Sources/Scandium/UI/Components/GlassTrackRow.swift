@@ -11,6 +11,7 @@ struct GlassTrackRow: View {
 
     @EnvironmentObject var library: LibraryManager
     @ObservedObject private var auth = SoundCloudAuthManager.shared
+    @State private var showUnavailable = false
 
     /// Same width for the duration and the now-playing icon, so the hearts
     /// line up on every row.
@@ -29,7 +30,9 @@ struct GlassTrackRow: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
+        Button(action: {
+            if track.isPlayable { onTap() } else { showUnavailable = true }
+        }) {
             HStack(spacing: 12) {
                 // 48x48 Artwork, 6pt radius, clipped
                 CachedAsyncImage(
@@ -38,6 +41,7 @@ struct GlassTrackRow: View {
                     height: 48,
                     cornerRadius: 6
                 )
+                .opacity(contentOpacity)
 
                 // Track title + Artist
                 VStack(alignment: .leading, spacing: 3) {
@@ -65,6 +69,7 @@ struct GlassTrackRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(contentOpacity)
 
                 // Heart and duration sit together, without the row's spacing
                 HStack(spacing: 0) {
@@ -94,6 +99,7 @@ struct GlassTrackRow: View {
                         }
                     }
                     .frame(width: Self.trailingWidth, alignment: .trailing)
+                    .opacity(contentOpacity)
                 }
             }
             .padding(.horizontal, 16)
@@ -101,7 +107,15 @@ struct GlassTrackRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .alert("Not Available", isPresented: $showUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("SoundCloud only offers this track with copy protection, which this app can't play.")
+        }
     }
+
+    /// Tracks that can't be played are greyed out
+    private var contentOpacity: Double { track.isPlayable ? 1 : 0.4 }
 
     // MARK: - Now Playing Indicator
 

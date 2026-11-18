@@ -41,6 +41,7 @@ struct ProfileView: View {
             accountSection
             appearanceSection
             playbackSection
+            audioQualitySection
             storageSection
             advancedSection
             aboutSection
@@ -161,17 +162,38 @@ struct ProfileView: View {
     // MARK: - Playback
 
     private var playbackSection: some View {
-        Section(header: Text("Playback"), footer: Text("High Quality Audio streams 160 kbps AAC (256 kbps with SoundCloud Go+) instead of the smaller standard stream, using more data and a little more battery. It applies from the next track. Autoplay keeps playing similar tracks when the queue ends.")) {
+        Section(header: Text("Playback"), footer: Text("Autoplay keeps playing similar tracks when the queue ends.")) {
             Toggle("Autoplay Similar Tracks", isOn: $settings.autoPlayRelated)
             Toggle("Pause When Headphones Disconnect", isOn: $settings.pauseOnHeadphoneDisconnect)
             Toggle("Skip Tracks That Fail to Play", isOn: $settings.autoSkipOnError)
-            Toggle("High Quality Audio", isOn: $settings.highQualityAudio)
             Toggle("Waveform Scrubber", isOn: $settings.showWaveform)
             Toggle("Keep Screen Awake", isOn: $settings.keepScreenAwake)
             Toggle("Haptic Feedback", isOn: $settings.enableHaptics)
             Picker("Sleep Timer", selection: sleepTimer) {
                 ForEach(SleepTimerOption.allCases) { Text($0.title).tag($0) }
             }
+        }
+    }
+
+    // MARK: - Audio Quality
+
+    private var audioQualitySection: some View {
+        Section(
+            header: Text("Audio Quality"),
+            footer: Text("Higher quality uses more data and a little more battery.")
+        ) {
+            Picker("Audio Quality", selection: $settings.audioQuality) {
+                ForEach(AudioQuality.allCases) { quality in
+                    HStack {
+                        Text(quality.title)
+                        Spacer()
+                        Text(quality.detail).foregroundColor(.secondary)
+                    }
+                    .tag(quality)
+                }
+            }
+            .pickerStyle(InlinePickerStyle())
+            .labelsHidden()
         }
     }
 

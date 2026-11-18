@@ -52,6 +52,14 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     /// Needed to request high-quality (Go+) streams
     let trackAuthorization: String?
 
+    /// False when SoundCloud only offers this track as encrypted (DRM)
+    /// streams, which iOS's player can't play. A track whose stream info
+    /// isn't loaded yet counts as playable.
+    var isPlayable: Bool {
+        guard let transcodings = media?.transcodings else { return true }
+        return transcodings.contains { $0.isProgressive || $0.isHLS }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, title, description, duration, genre, uri, urn, kind, permalink, streamable, downloadable, media, user
         case fullDuration = "full_duration"
