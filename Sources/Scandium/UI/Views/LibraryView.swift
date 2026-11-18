@@ -104,7 +104,8 @@ struct LibraryView: View {
         } else {
             PlayShuffleButtons(tracks: library.likedTracks)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
                 .plainListRow()
 
             ForEach(Array(library.likedTracks.enumerated()), id: \.element.id) { index, track in

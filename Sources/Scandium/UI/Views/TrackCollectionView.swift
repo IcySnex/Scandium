@@ -40,13 +40,14 @@ struct TrackCollectionView: View {
         List {
             header
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
                 .plainListRow()
 
             if !tracks.isEmpty {
                 PlayShuffleButtons(tracks: tracks)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 16)
                     .plainListRow()
             }
 
