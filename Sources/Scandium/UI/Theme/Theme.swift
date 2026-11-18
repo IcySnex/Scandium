@@ -10,28 +10,18 @@ enum ScandiumTheme {
         AppSettings.shared.isDark
     }
 
-    // Colors resolve against the current light/dark trait, so every view
-    // updates when the theme changes, not only views that observe settings.
-    private static func dynamic(light: UIColor, dark: UIColor) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
-    }
+    // iOS system colors: they match the platform in light and dark mode and
+    // resolve against the current trait, so every view updates at once when
+    // the theme changes.
+    static let bgPrimary = Color(UIColor.systemBackground)
+    static let surfaceDark = Color(UIColor.secondarySystemBackground)
+    static let surfaceCard = Color(UIColor.secondarySystemBackground)
+    static let surfaceElevated = Color(UIColor.tertiarySystemFill)
 
-    private static func gray(_ white: CGFloat, _ blue: CGFloat? = nil) -> UIColor {
-        UIColor(red: white, green: white, blue: blue ?? white, alpha: 1)
-    }
+    static let textPrimary = Color(UIColor.label)
+    static let subtext = Color(UIColor.secondaryLabel)
 
-    static let bgPrimary = dynamic(light: gray(0.95, 0.97), dark: .black)
-    static let surfaceDark = dynamic(light: gray(0.91, 0.93), dark: gray(0.071))
-    static let surfaceCard = dynamic(light: .white, dark: gray(0.094))
-    static let surfaceElevated = dynamic(light: gray(0.88, 0.90), dark: gray(0.110, 0.118))
-
-    static let textPrimary = dynamic(light: gray(0.1), dark: .white)
-    static let subtext = dynamic(light: gray(0.45, 0.48), dark: gray(0.655))
-
-    static let hairline = dynamic(
-        light: UIColor.black.withAlphaComponent(0.10),
-        dark: UIColor.white.withAlphaComponent(0.08)
-    )
+    static let hairline = Color(UIColor.separator)
     static let hairlinewidth: CGFloat = 0.5
 
     // Accents

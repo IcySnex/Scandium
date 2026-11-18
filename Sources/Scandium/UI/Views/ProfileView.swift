@@ -1,4 +1,4 @@
-// ProfileView.swift — Account and settings
+// ProfileView.swift — Account and settings, as native grouped lists
 // Project: Scandium | Author: MeoHunter | License: GPL-3.0
 
 import SwiftUI
@@ -21,37 +21,39 @@ struct ProfileView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
     }
 
-    var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                accountCard
-                appearanceSection
-                playbackSection
-                storageSection
-                advancedSection
-                aboutSection
+    private var manualSignInPresented: Binding<Bool> {
+        Binding(get: { manualSignIn != nil }, set: { if !$0 { manualSignIn = nil } })
+    }
+
+    private var sleepTimer: Binding<SleepTimerOption> {
+        Binding(
+            get: { settings.sleepTimerOption },
+            set: { option in
+                AudioPlayerEngineWrapper.sharedEngine?.setSleepTimer(option)
+                settings.sleepTimerOption = option
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 80)
+        )
+    }
+
+    var body: some View {
+        List {
+            accountSection
+            appearanceSection
+            playbackSection
+            storageSection
+            advancedSection
+            aboutSection
         }
+        .listStyle(InsetGroupedListStyle())
+        .toggleStyle(SwitchToggleStyle(tint: settings.accentColor.color))
         .navigationTitle("Profile")
         .sheet(isPresented: $showSignIn) {
             SoundCloudLoginSheet(isPresented: $showSignIn, onLoginSuccess: {
                 showToast("Signed in")
             })
         }
-        .sheet(isPresented: Binding(
-            get: { manualSignIn != nil },
-            set: { if !$0 { manualSignIn = nil } }
-        )) {
-            ManualSignInSheet(
-                mode: manualSignIn ?? .token,
-                isPresented: Binding(
-                    get: { manualSignIn != nil },
-                    set: { if !$0 { manualSignIn = nil } }
-                )
-            ) { message in
+        .sheet(isPresented: manualSignInPresented) {
+            ManualSignInSheet(mode: manualSignIn ?? .token, isPresented: manualSignInPresented) { message in
                 showToast(message)
             }
         }
@@ -81,44 +83,36 @@ struct ProfileView: View {
     // MARK: - Account
 
     @ViewBuilder
-    private var accountCard: some View {
+    private var accountSection: some View {
         if auth.isLoggedIn, let user = auth.currentUser {
-            HStack(spacing: 14) {
-                CachedAsyncImage(url: user.highResAvatarURL, width: 56, height: 56, cornerRadius: 28)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(user.username)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(ScandiumTheme.textPrimary)
-                        .lineLimit(1)
-                    Text(auth.canSyncLikes
-                         ? "\(auth.userLikedTracks.count) likes · \(auth.userPlaylists.count) playlists"
-                         : "Public profile · read-only")
-                        .font(.system(size: 13))
-                        .foregroundColor(ScandiumTheme.subtext)
+            Section {
+                HStack(spacing: 14) {
+                    CachedAsyncImage(url: user.highResAvatarURL, width: 52, height: 52, cornerRadius: 26)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(user.username)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text(auth.canSyncLikes
+                             ? "\(auth.userLikedTracks.count) likes · \(auth.userPlaylists.count) playlists"
+                             : "Public profile · read-only")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .padding(.vertical, 4)
 
-                Spacer()
-
-                Button("Log Out") { showLogOutConfirm = true }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.red)
+                Button("Log Out", role: .destructive) { showLogOutConfirm = true }
             }
-            .padding(14)
-            .background(ScandiumTheme.surfaceDark)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         } else {
-            SettingsGroup {
-                SettingsButtonRow(icon: "person.crop.circle", title: "Sign in to SoundCloud", subtitle: "Sync your likes and playlists") {
-                    showSignIn = true
+            Section(footer: Text("A public profile is read-only: liking is turned off, and nothing is saved to SoundCloud.")) {
+                Button(action: { showSignIn = true }) {
+                    Label("Sign in to SoundCloud", systemImage: "person.crop.circle")
                 }
-                SettingsDivider()
-                SettingsButtonRow(icon: "key", title: "Sign in with a token") {
-                    manualSignIn = .token
+                Button(action: { manualSignIn = .token }) {
+                    Label("Sign in with a Token", systemImage: "key")
                 }
-                SettingsDivider()
-                SettingsButtonRow(icon: "link", title: "Load a public profile", subtitle: "Read-only, nothing is saved to SoundCloud") {
-                    manualSignIn = .profile
+                Button(action: { manualSignIn = .profile }) {
+                    Label("Load a Public Profile", systemImage: "link")
                 }
             }
         }
@@ -127,21 +121,16 @@ struct ProfileView: View {
     // MARK: - Appearance
 
     private var appearanceSection: some View {
-        SettingsGroup(title: "Appearance") {
+        Section(header: Text("Appearance")) {
             Picker("Theme", selection: $settings.themeMode) {
                 ForEach(AppThemeMode.allCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             }
             .pickerStyle(SegmentedPickerStyle())
-            .padding(12)
-
-            SettingsDivider()
 
             HStack {
                 Text("Accent Color")
-                    .font(.system(size: 15))
-                    .foregroundColor(ScandiumTheme.textPrimary)
                 Spacer()
                 HStack(spacing: 12) {
                     ForEach(AppAccentColor.allCases) { accent in
@@ -159,140 +148,110 @@ struct ProfileView: View {
                                         .opacity(settings.accentColor == accent ? 1 : 0)
                                 )
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        // Borderless, so only the circle reacts, not the whole row
+                        .buttonStyle(BorderlessButtonStyle())
                         .accessibilityLabel(accent.title)
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
     }
 
     // MARK: - Playback
 
     private var playbackSection: some View {
-        SettingsGroup(title: "Playback") {
-            SettingsToggleRow(title: "Autoplay Similar Tracks", subtitle: "When the queue ends", isOn: $settings.autoPlayRelated)
-            SettingsDivider()
-            SettingsToggleRow(title: "Pause When Headphones Disconnect", isOn: $settings.pauseOnHeadphoneDisconnect)
-            SettingsDivider()
-            SettingsToggleRow(title: "Skip Tracks That Fail to Play", isOn: $settings.autoSkipOnError)
-            SettingsDivider()
-            SettingsToggleRow(title: "Waveform Scrubber", subtitle: "In the full player", isOn: $settings.showWaveform)
-            SettingsDivider()
-            SettingsToggleRow(title: "Keep Screen Awake", isOn: $settings.keepScreenAwake)
-            SettingsDivider()
-            SettingsToggleRow(title: "Haptic Feedback", isOn: $settings.enableHaptics)
-            SettingsDivider()
-
-            HStack {
-                Text("Sleep Timer")
-                    .font(.system(size: 15))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                Spacer()
-                Menu {
-                    Picker("Sleep Timer", selection: Binding(
-                        get: { settings.sleepTimerOption },
-                        set: { option in
-                            AudioPlayerEngineWrapper.sharedEngine?.setSleepTimer(option)
-                            settings.sleepTimerOption = option
-                        }
-                    )) {
-                        ForEach(SleepTimerOption.allCases) { Text($0.title).tag($0) }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(settings.sleepTimerOption.title)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .font(.system(size: 15))
-                    .foregroundColor(ScandiumTheme.subtext)
-                }
+        Section(header: Text("Playback"), footer: Text("Autoplay keeps playing similar tracks when the queue ends.")) {
+            Toggle("Autoplay Similar Tracks", isOn: $settings.autoPlayRelated)
+            Toggle("Pause When Headphones Disconnect", isOn: $settings.pauseOnHeadphoneDisconnect)
+            Toggle("Skip Tracks That Fail to Play", isOn: $settings.autoSkipOnError)
+            Toggle("Waveform Scrubber", isOn: $settings.showWaveform)
+            Toggle("Keep Screen Awake", isOn: $settings.keepScreenAwake)
+            Toggle("Haptic Feedback", isOn: $settings.enableHaptics)
+            Picker("Sleep Timer", selection: sleepTimer) {
+                ForEach(SleepTimerOption.allCases) { Text($0.title).tag($0) }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
     }
 
     // MARK: - Storage
 
     private var storageSection: some View {
-        SettingsGroup(title: "Storage") {
-            SettingsValueRow(title: "Artwork Cache", value: storage.formattedImageCache) {
+        Section(header: Text("Storage")) {
+            cacheRow("Artwork Cache", size: storage.formattedImageCache) {
                 storage.clearImageCacheOnly()
                 ImageCacheStore.shared.clear()
                 showToast("Artwork cache cleared")
             }
-            SettingsDivider()
-            SettingsValueRow(title: "Audio Cache", value: storage.formattedAudioNetwork) {
+            cacheRow("Audio Cache", size: storage.formattedAudioNetwork) {
                 storage.clearAudioCacheOnly()
                 showToast("Audio cache cleared")
             }
-            SettingsDivider()
-            Button(action: { showClearCacheConfirm = true }) {
+            Button(role: .destructive, action: { showClearCacheConfirm = true }) {
                 HStack {
                     Text("Clear All Cached Data")
-                        .foregroundColor(.red)
                     Spacer()
-                    Text(storage.formattedTotal)
-                        .foregroundColor(ScandiumTheme.subtext)
+                    Text(storage.formattedTotal).foregroundColor(.secondary)
                 }
-                .font(.system(size: 15))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    private func cacheRow(_ title: String, size: String, clear: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(size).foregroundColor(.secondary)
+            Button("Clear", action: clear)
+                .buttonStyle(BorderlessButtonStyle())
+                .padding(.leading, 12)
         }
     }
 
     // MARK: - Advanced
 
     private var advancedSection: some View {
-        SettingsGroup(title: "Advanced") {
+        Section(header: Text("Advanced")) {
             NavigationLink(destination: ClientIDSettingsView()) {
-                SettingsRowLabel(
-                    icon: "network",
-                    title: "Client ID",
-                    subtitle: scraper.manualClientID != nil ? "Custom" : scraper.statusDescription,
-                    showsChevron: true
-                )
+                HStack {
+                    Text("Client ID")
+                    Spacer()
+                    Text(scraper.manualClientID != nil ? "Custom" : scraper.statusDescription)
+                        .foregroundColor(.secondary)
+                }
             }
-            .buttonStyle(PlainButtonStyle())
         }
     }
 
     // MARK: - About
 
     private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SettingsGroup(title: "About") {
-                HStack {
-                    Text("Version")
-                        .foregroundColor(ScandiumTheme.textPrimary)
-                    Spacer()
-                    Text(appVersion)
-                        .foregroundColor(ScandiumTheme.subtext)
-                }
-                .font(.system(size: 15))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-
-                SettingsDivider()
-
-                if let sourceURL = Self.sourceURL {
-                    Link(destination: sourceURL) {
-                        SettingsRowLabel(icon: nil, title: "Source Code", subtitle: "Scandium by MeoHunter · GPL-3.0", trailingIcon: "arrow.up.right")
+        Section(
+            header: Text("About"),
+            footer: Text("Not affiliated with or endorsed by SoundCloud.")
+                // Room for the mini player below the last section
+                .padding(.bottom, 70)
+        ) {
+            HStack {
+                Text("Version")
+                Spacer()
+                Text(appVersion).foregroundColor(.secondary)
+            }
+            if let sourceURL = Self.sourceURL {
+                Link(destination: sourceURL) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Source Code").foregroundColor(.primary)
+                            Text("Scandium by MeoHunter · GPL-3.0")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
-
-            Text("Not affiliated with or endorsed by SoundCloud.")
-                .font(.system(size: 12))
-                .foregroundColor(ScandiumTheme.subtext)
-                .frame(maxWidth: .infinity)
         }
     }
 
@@ -302,7 +261,7 @@ struct ProfileView: View {
     private var toastOverlay: some View {
         if let message = toastMessage {
             Text(message)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -335,109 +294,61 @@ struct ClientIDSettingsView: View {
     @State private var message: String?
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("SoundCloud requires a client ID for every request. The app detects one automatically; set your own only if detection keeps failing.")
-                    .font(.system(size: 13))
-                    .foregroundColor(ScandiumTheme.subtext)
-
-                SettingsGroup(title: "Status") {
+        Form {
+            Section(
+                header: Text("Status"),
+                footer: Text("SoundCloud requires a client ID for every request. The app detects one automatically; set your own only if detection keeps failing.")
+            ) {
+                HStack {
+                    Circle()
+                        .fill(scraper.lastError == nil ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(scraper.statusDescription)
+                    Spacer()
+                    if let id = scraper.currentClientID {
+                        Text(id.prefix(8) + "…")
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                if let error = scraper.lastError {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundColor(.orange)
+                }
+                Button(action: refresh) {
                     HStack {
-                        Circle()
-                            .fill(scraper.lastError == nil ? Color.green : Color.orange)
-                            .frame(width: 8, height: 8)
-                        Text(scraper.statusDescription)
-                            .foregroundColor(ScandiumTheme.textPrimary)
+                        Text("Detect Again")
                         Spacer()
-                        if let id = scraper.currentClientID {
-                            Text(id.prefix(8) + "…")
-                                .font(.system(size: 13, design: .monospaced))
-                                .foregroundColor(ScandiumTheme.subtext)
-                        }
+                        if isRefreshing { ProgressView() }
                     }
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 13)
-
-                    if let error = scraper.lastError {
-                        SettingsDivider()
-                        Text(error)
-                            .font(.system(size: 12))
-                            .foregroundColor(.orange)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                    }
-
-                    SettingsDivider()
-
-                    Button(action: refresh) {
-                        HStack {
-                            Text("Detect Again")
-                                .foregroundColor(ScandiumTheme.accent)
-                            Spacer()
-                            if isRefreshing {
-                                ProgressView().scaleEffect(0.8)
-                            }
-                        }
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(isRefreshing)
                 }
+                .disabled(isRefreshing)
+            }
 
-                SettingsGroup(title: "Custom Client ID") {
-                    TextField("32-character client ID", text: $manualInput)
-                        .font(.system(size: 15, design: .monospaced))
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .foregroundColor(ScandiumTheme.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-
-                    SettingsDivider()
-
-                    HStack(spacing: 20) {
-                        Button("Save") {
-                            scraper.setManualClientID(manualInput)
-                            message = "Custom client ID saved"
-                        }
-                        .disabled(manualInput.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                        if scraper.manualClientID != nil {
-                            Button("Use Automatic") {
-                                scraper.setManualClientID(nil)
-                                manualInput = ""
-                                message = "Using the detected client ID"
-                            }
-                        }
-                        Spacer()
+            Section(header: Text("Custom Client ID"), footer: message.map { Text($0) }) {
+                TextField("32-character client ID", text: $manualInput)
+                    .font(.system(.body, design: .monospaced))
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                Button("Save") {
+                    scraper.setManualClientID(manualInput)
+                    message = "Custom client ID saved"
+                }
+                .disabled(manualInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                if scraper.manualClientID != nil {
+                    Button("Use Automatic") {
+                        scraper.setManualClientID(nil)
+                        manualInput = ""
+                        message = "Using the detected client ID"
                     }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(ScandiumTheme.accent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 13)
-                }
-
-                if let message = message {
-                    Text(message)
-                        .font(.system(size: 13))
-                        .foregroundColor(ScandiumTheme.subtext)
-                }
-
-                NavigationLink(destination: ClientIDGuideView()) {
-                    Text("How to find a client ID")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(ScandiumTheme.accent)
                 }
             }
-            .padding(16)
-            .padding(.bottom, 80)
+
+            Section {
+                NavigationLink("How to Find a Client ID", destination: ClientIDGuideView())
+            }
         }
-        .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
         .navigationTitle("Client ID")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -480,35 +391,22 @@ struct ManualSignInSheet: View {
 
     var body: some View {
         NavigationView {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(mode == .token
-                         ? "Paste the OAuth token of your SoundCloud account. Likes you add or remove here are saved to your account."
-                         : "Paste a soundcloud.com profile link to load that profile's public likes and playlists. This is read-only: likes you change here stay on this phone.")
-                        .font(.system(size: 14))
-                        .foregroundColor(ScandiumTheme.subtext)
-
+            Form {
+                Section(footer: Text(mode == .token
+                    ? "Paste the OAuth token of your SoundCloud account. Likes you add or remove here are saved to your account."
+                    : "Paste a soundcloud.com profile link to load that profile's public likes and playlists. This is read-only, so liking is turned off.")
+                ) {
                     TextField(mode == .token ? "OAuth token" : "soundcloud.com/username", text: $input)
-                        .font(.system(size: 15))
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                         .keyboardType(mode == .token ? .default : .URL)
-                        .foregroundColor(ScandiumTheme.textPrimary)
-                        .padding(12)
-                        .background(ScandiumTheme.surfaceElevated)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    if mode == .token {
-                        NavigationLink(destination: OAuthTokenGuideView()) {
-                            Text("How to find your token")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(ScandiumTheme.accent)
-                        }
+                }
+                if mode == .token {
+                    Section {
+                        NavigationLink("How to Find Your Token", destination: OAuthTokenGuideView())
                     }
                 }
-                .padding(20)
             }
-            .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
             .navigationTitle(mode == .token ? "Sign In with Token" : "Public Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -542,129 +440,5 @@ struct ManualSignInSheet: View {
                 onDone("Profile loaded")
             }
         }
-    }
-}
-
-// MARK: - Settings Building Blocks
-
-struct SettingsGroup<Content: View>: View {
-    var title: String? = nil
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let title = title {
-                Text(title.uppercased())
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(ScandiumTheme.subtext)
-                    .padding(.horizontal, 4)
-            }
-            VStack(spacing: 0, content: content)
-                .background(ScandiumTheme.surfaceDark)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-    }
-}
-
-struct SettingsDivider: View {
-    var body: some View { HairlineDivider(leadingPadding: 16) }
-}
-
-struct SettingsToggleRow: View {
-    let title: String
-    var subtitle: String? = nil
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(ScandiumTheme.subtext)
-                }
-            }
-        }
-        .toggleStyle(SwitchToggleStyle(tint: ScandiumTheme.accent))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-}
-
-/// A row showing a size with a trailing "Clear" action.
-struct SettingsValueRow: View {
-    let title: String
-    let value: String
-    let onClear: () -> Void
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .foregroundColor(ScandiumTheme.textPrimary)
-            Spacer()
-            Text(value)
-                .foregroundColor(ScandiumTheme.subtext)
-            Button("Clear", action: onClear)
-                .foregroundColor(ScandiumTheme.accent)
-                .padding(.leading, 8)
-        }
-        .font(.system(size: 15))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-    }
-}
-
-struct SettingsRowLabel: View {
-    let icon: String?
-    let title: String
-    var subtitle: String? = nil
-    var showsChevron: Bool = false
-    var trailingIcon: String? = nil
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if let icon = icon {
-                Image(systemName: icon)
-                    .font(.system(size: 17))
-                    .foregroundColor(ScandiumTheme.accent)
-                    .frame(width: 24)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15))
-                    .foregroundColor(ScandiumTheme.textPrimary)
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(ScandiumTheme.subtext)
-                }
-            }
-            Spacer()
-            if showsChevron || trailingIcon != nil {
-                Image(systemName: trailingIcon ?? "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(ScandiumTheme.subtext)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-}
-
-struct SettingsButtonRow: View {
-    let icon: String
-    let title: String
-    var subtitle: String? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            SettingsRowLabel(icon: icon, title: title, subtitle: subtitle, showsChevron: true)
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }

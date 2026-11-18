@@ -61,7 +61,9 @@ struct MainContainerView: View {
         }
         .accentColor(settings.accentColor.color)
         .preferredColorScheme(settings.themeMode.colorScheme)
-        .fullScreenCover(isPresented: $showFullPlayer) {
+        // A standard sheet: the app shrinks behind it and it closes by
+        // swiping down, like the Music app
+        .sheet(isPresented: $showFullPlayer) {
             FullPlayerView()
                 .environmentObject(player)
                 .environmentObject(api)

@@ -10,6 +10,11 @@ struct GlassTrackRow: View {
     let onTap: () -> Void
 
     @EnvironmentObject var library: LibraryManager
+    @ObservedObject private var auth = SoundCloudAuthManager.shared
+
+    /// Same width for the duration and the now-playing icon, so the hearts
+    /// line up on every row.
+    private static let trailingWidth: CGFloat = 44
 
     init(
         track: Track,
@@ -64,26 +69,30 @@ struct GlassTrackRow: View {
                 // Like Button
                 if showLikeButton {
                     let isLiked = library.isLiked(track: track)
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            library.toggleLike(track: track)
-                        }
-                    }) {
+                    Button(action: { library.toggleLike(track: track) }) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(isLiked ? ScandiumTheme.spotifyGreen : ScandiumTheme.subtext.opacity(0.5))
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    // Likes need an account they can be saved to
+                    .disabled(!auth.canSyncLikes)
+                    .opacity(auth.canSyncLikes ? 1 : 0.4)
                 }
 
-                if isCurrentlyPlaying {
-                    nowPlayingIndicator
-                } else {
-                    Text(track.formattedDuration)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
-                        .foregroundColor(ScandiumTheme.subtext)
+                Group {
+                    if isCurrentlyPlaying {
+                        nowPlayingIndicator
+                    } else {
+                        Text(track.formattedDuration)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundColor(ScandiumTheme.subtext)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
+                .frame(width: Self.trailingWidth, alignment: .trailing)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -98,6 +107,5 @@ struct GlassTrackRow: View {
         Image(systemName: "speaker.wave.2.fill")
             .font(.system(size: 13))
             .foregroundColor(ScandiumTheme.accent)
-            .frame(width: 14, height: 14)
     }
 }

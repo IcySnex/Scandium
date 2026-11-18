@@ -1,4 +1,4 @@
-// FullPlayerView.swift — Full-screen player (Spotify / Apple Music standard)
+// FullPlayerView.swift — Now Playing, presented as a native sheet
 // Project: Scandium | Author: MeoHunter | License: GPL-3.0
 
 import SwiftUI
@@ -7,12 +7,11 @@ struct FullPlayerView: View {
     @EnvironmentObject var player: AudioPlayerEngine
     @EnvironmentObject var api: SoundCloudAPI
     @EnvironmentObject var library: LibraryManager
-    @Environment(\.presentationMode) var presentationMode
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var auth = SoundCloudAuthManager.shared
 
     @State private var waveformSamples: [Float] = []
     @State private var showQueueSheet: Bool = false
-    @State private var dragOffsetY: CGFloat = 0
 
     private let playbackRates: [Float] = [0.8, 1.0, 1.25, 1.5, 2.0]
 
@@ -20,85 +19,49 @@ struct FullPlayerView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let screenWidth = max(1, geometry.size.width)
-            let screenHeight = max(1, geometry.size.height)
-            let artSize = max(1, min(screenWidth - 48, screenHeight * 0.38))
+            let artSize = max(1, min(geometry.size.width - 48, geometry.size.height * 0.42))
 
-            ZStack {
-                Color.black
+            VStack(spacing: 0) {
+                // Grabber, like the Music app: swipe down anywhere to close
+                Capsule()
+                    .fill(Color(UIColor.tertiaryLabel))
+                    .frame(width: 36, height: 5)
+                    .padding(.top, 8)
 
-                VStack(spacing: 0) {
-                    headerSection
-                        .padding(.top, 12)
-                        .padding(.bottom, 14)
+                Spacer(minLength: 12)
 
-                    Spacer(minLength: 6)
+                CachedAsyncImage(
+                    url: player.currentTrack?.highResArtworkURL,
+                    width: artSize,
+                    height: artSize,
+                    cornerRadius: 10
+                )
 
-                    artworkSection(artSize: artSize)
+                Spacer(minLength: 16)
 
-                    Spacer(minLength: 14)
-
-                    trackInfoSection
-                        .padding(.horizontal, 24)
-
-                    Spacer(minLength: 12)
-
-                    scrubberSection
-                        .padding(.horizontal, 24)
-
-                    Spacer(minLength: 12)
-
-                    controlsSection
-                        .padding(.horizontal, 24)
-
-                    Spacer(minLength: 12)
-
-                    bottomBarSection
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
-                }
-                .frame(width: screenWidth, height: screenHeight)
-                .clipped()
+                trackInfoSection
+                Spacer(minLength: 12)
+                PlayerScrubberSection(
+                    clock: player.clock,
+                    samples: settings.showWaveform ? waveformSamples : []
+                )
+                Spacer(minLength: 8)
+                controlsSection
+                Spacer(minLength: 8)
+                volumeSection
+                Spacer(minLength: 12)
+                bottomBarSection
+                    .padding(.bottom, 8)
             }
-            .frame(width: screenWidth, height: screenHeight)
-            .clipped()
-            .offset(y: max(0, dragOffsetY))
-            .gesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { value in
-                        if value.translation.height > 0 {
-                            dragOffsetY = value.translation.height
-                        }
-                    }
-                    .onEnded { value in
-                        if value.translation.height > 120 || value.predictedEndTranslation.height > 250 {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                dragOffsetY = screenHeight
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                presentationMode.wrappedValue.dismiss()
-                            }
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                dragOffsetY = 0
-                            }
-                        }
-                    }
-            )
+            .padding(.horizontal, 24)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        // Keep the header below the status bar
-        .ignoresSafeArea(edges: .bottom)
-        .background(Color.black.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-        .onAppear {
-            loadWaveform()
-        }
-        .onChange(of: player.currentTrack?.id) { _ in
-            loadWaveform()
-        }
-        .onChange(of: settings.showWaveform) { _ in
-            loadWaveform()
-        }
+        .background(ScandiumTheme.bgPrimary.ignoresSafeArea())
+        .accentColor(settings.accentColor.color)
+        .preferredColorScheme(settings.themeMode.colorScheme)
+        .onAppear { loadWaveform() }
+        .onChange(of: player.currentTrack?.id) { _ in loadWaveform() }
+        .onChange(of: settings.showWaveform) { _ in loadWaveform() }
         .sheet(isPresented: $showQueueSheet) {
             QueueSheetView()
                 .environmentObject(player)
@@ -106,237 +69,128 @@ struct FullPlayerView: View {
         }
     }
 
-    // MARK: - 1. Header Section
-
-    private var headerSection: some View {
-        VStack(spacing: 10) {
-            // Grabber pill
-            RoundedRectangle(cornerRadius: 2.5)
-                .fill(Color.white.opacity(0.3))
-                .frame(width: 36, height: 4)
-
-            HStack {
-                Button(action: {
-                    presentationMode.wrappedValue.dismiss()
-                }) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
-                        .frame(width: 36, height: 36)
-                }
-
-                Spacer()
-
-                Text("Now Playing")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(ScandiumTheme.subtext)
-
-                Spacer()
-
-                // Mirror spacer for perfect center
-                Color.clear
-                    .frame(width: 36, height: 36)
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    // MARK: - 2. Artwork Section
-
-    private func artworkSection(artSize: CGFloat) -> some View {
-        CachedAsyncImage(
-            url: player.currentTrack?.highResArtworkURL,
-            width: artSize,
-            height: artSize,
-            cornerRadius: 12
-        )
-    }
-
-    // MARK: - 3. Track Info (Spotify Left-Aligned)
+    // MARK: - Title, Artist & Like
 
     private var trackInfoSection: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(player.currentTrack?.title ?? "No track selected")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(player.currentTrack?.title ?? "Not Playing")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(.primary)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(player.currentTrack?.user?.username ?? "SoundCloud")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(ScandiumTheme.subtext)
+                Text(player.currentTrack?.user?.username ?? " ")
+                    .font(.body)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let track = player.currentTrack {
                 let isLiked = library.isLiked(track: track)
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        library.toggleLike(track: track)
-                    }
-                }) {
+                Button(action: { library.toggleLike(track: track) }) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(isLiked ? ScandiumTheme.spotifyGreen : Color.white.opacity(0.7))
-                        .frame(width: 40, height: 40)
+                        .font(.system(size: 22))
+                        .foregroundColor(isLiked ? .accentColor : .secondary)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(PlainButtonStyle())
+                // Likes need an account they can be saved to
+                .disabled(!auth.canSyncLikes)
+                .opacity(auth.canSyncLikes ? 1 : 0.4)
             }
         }
     }
 
-    // MARK: - 4. Scrubber & Time Labels
-
-    private var scrubberSection: some View {
-        PlayerScrubberSection(
-            clock: player.clock,
-            samples: settings.showWaveform ? waveformSamples : []
-        )
-    }
-
-    // MARK: - 5. Controls Section (Centered 5-Button Cluster)
+    // MARK: - Transport Controls
 
     private var controlsSection: some View {
         HStack(spacing: 0) {
-            // Shuffle
-            Button(action: {
-                player.toggleShuffle()
-            }) {
-                Image(systemName: "shuffle")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(player.isShuffleEnabled ? ScandiumTheme.spotifyGreen : Color.white.opacity(0.6))
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(PlainButtonStyle())
-
+            controlButton("shuffle", size: 19, isOn: player.isShuffleEnabled) { player.toggleShuffle() }
             Spacer()
-
-            // Previous
-            Button(action: {
-                player.previousTrack()
-            }) {
-                Image(systemName: "backward.end.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 48, height: 48)
-            }
-            .buttonStyle(PlainButtonStyle())
-
+            controlButton("backward.fill", size: 30) { player.previousTrack() }
             Spacer()
-
-            // Large White Play / Pause Circle (64x64)
-            Button(action: {
+            controlButton(player.playbackState.isPlaying ? "pause.fill" : "play.fill", size: 42) {
                 player.togglePlayPause()
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 64, height: 64)
-
-                    Image(systemName: player.playbackState.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(.black)
-                        .offset(x: player.playbackState.isPlaying ? 0 : 2)
-                }
             }
-            .buttonStyle(PlainButtonStyle())
-
+            .frame(width: 64)
             Spacer()
-
-            // Next
-            Button(action: {
-                player.nextTrack()
-            }) {
-                Image(systemName: "forward.end.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 48, height: 48)
-            }
-            .buttonStyle(PlainButtonStyle())
-
+            controlButton("forward.fill", size: 30) { player.nextTrack() }
             Spacer()
-
-            // Repeat
-            Button(action: {
-                player.toggleRepeat()
-            }) {
-                Image(systemName: "repeat")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(player.isRepeatEnabled ? ScandiumTheme.spotifyGreen : Color.white.opacity(0.6))
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(PlainButtonStyle())
+            controlButton("repeat", size: 19, isOn: player.isRepeatEnabled) { player.toggleRepeat() }
         }
     }
 
-    // MARK: - 6. Bottom Volume & Queue Section
+    private func controlButton(_ symbol: String, size: CGFloat, isOn: Bool? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size))
+                .foregroundColor(isOn.map { $0 ? .accentColor : .secondary } ?? .primary)
+                .frame(minWidth: 44, minHeight: 56)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
 
-    private var bottomBarSection: some View {
-        HStack(spacing: 12) {
+    // MARK: - Volume
+
+    private var volumeSection: some View {
+        HStack(spacing: 10) {
             Image(systemName: "speaker.fill")
-                .font(.system(size: 11))
-                .foregroundColor(ScandiumTheme.subtext)
-
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
             PlayerVolumeSlider(
                 value: Binding(
                     get: { Double(player.playbackVolume) },
                     set: { player.setPlaybackVolume(Float($0)) }
                 )
             )
-                .frame(height: 20)
-
             Image(systemName: "speaker.wave.3.fill")
-                .font(.system(size: 11))
-                .foregroundColor(ScandiumTheme.subtext)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+    }
 
-            Spacer(minLength: 8)
+    // MARK: - Speed & Queue
 
-            // Speed control button
-            Button(action: {
-                cyclePlaybackRate()
-            }) {
+    private var bottomBarSection: some View {
+        HStack {
+            // Fixed width, so "1.25x" doesn't shift anything
+            Button(action: cyclePlaybackRate) {
                 Text(formatSpeed(player.playbackRate))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(player.playbackRate == 1.0 ? Color.white.opacity(0.8) : ScandiumTheme.spotifyGreen)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(ScandiumTheme.surfaceElevated)
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .foregroundColor(player.playbackRate == 1.0 ? .secondary : .accentColor)
+                    .frame(width: 56, height: 30)
+                    .background(Color(UIColor.tertiarySystemFill))
                     .clipShape(Capsule())
             }
             .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel("Playback speed")
 
-            // Queue button
-            Button(action: {
-                showQueueSheet = true
-            }) {
+            Spacer()
+
+            Button(action: { showQueueSheet = true }) {
                 Image(systemName: "list.bullet")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(player.queue.isEmpty ? Color.white.opacity(0.3) : .white)
-                    .frame(width: 36, height: 36)
+                    .font(.system(size: 18))
+                    .foregroundColor(player.queue.isEmpty ? Color(UIColor.tertiaryLabel) : .secondary)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(PlainButtonStyle())
+            .disabled(player.queue.isEmpty)
+            .accessibilityLabel("Queue")
         }
     }
 
     private func cyclePlaybackRate() {
         let current = player.playbackRate
         if let idx = playbackRates.firstIndex(where: { abs($0 - current) < 0.05 }) {
-            let nextIdx = (idx + 1) % playbackRates.count
-            player.setPlaybackRate(playbackRates[nextIdx])
+            player.setPlaybackRate(playbackRates[(idx + 1) % playbackRates.count])
         } else {
             player.setPlaybackRate(1.0)
         }
     }
 
     private func formatSpeed(_ rate: Float) -> String {
-        if rate == Float(Int(rate)) {
-            return String(format: "%.0fx", rate)
-        } else {
-            return String(format: "%.2gx", rate)
-        }
+        rate == Float(Int(rate)) ? String(format: "%.0fx", rate) : String(format: "%.2gx", rate)
     }
 
     // MARK: - Waveform Loading
@@ -347,16 +201,10 @@ struct FullPlayerView: View {
             return
         }
         Task {
-            do {
-                let samples = try await api.getWaveformData(for: track)
-                await MainActor.run {
-                    // Ignore a waveform that arrives after the track changed
-                    if player.currentTrack?.id == track.id { self.waveformSamples = samples }
-                }
-            } catch {
-                await MainActor.run {
-                    if player.currentTrack?.id == track.id { self.waveformSamples = [] }
-                }
+            let samples = (try? await api.getWaveformData(for: track)) ?? []
+            await MainActor.run {
+                // Ignore a waveform that arrives after the track changed
+                if player.currentTrack?.id == track.id { waveformSamples = samples }
             }
         }
     }
@@ -368,11 +216,8 @@ struct PlayerVolumeSlider: View {
     @Binding var value: Double
 
     var body: some View {
-        Slider(
-            value: $value,
-            in: 0...1
-        )
-        .tint(.white)
+        Slider(value: $value, in: 0...1)
+            .accentColor(.secondary)
     }
 }
 

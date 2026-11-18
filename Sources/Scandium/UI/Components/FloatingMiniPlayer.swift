@@ -6,6 +6,7 @@ import SwiftUI
 struct FloatingMiniPlayer: View {
     @EnvironmentObject var player: AudioPlayerEngine
     @EnvironmentObject var library: LibraryManager
+    @ObservedObject private var auth = SoundCloudAuthManager.shared
     let onTap: () -> Void
 
     init(onTap: @escaping () -> Void) {
@@ -44,17 +45,15 @@ struct FloatingMiniPlayer: View {
                         // Right Controls: Heart + Play/Pause
                         HStack(spacing: 16) {
                             // Minimal Heart
-                            Button(action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    library.toggleLike(track: track)
-                                }
-                            }) {
+                            Button(action: { library.toggleLike(track: track) }) {
                                 let isLiked = library.isLiked(track: track)
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 17, weight: .medium))
                                     .foregroundColor(isLiked ? ScandiumTheme.spotifyGreen : ScandiumTheme.subtext)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .disabled(!auth.canSyncLikes)
+                            .opacity(auth.canSyncLikes ? 1 : 0.4)
 
                             // Minimal Play / Pause
                             Button(action: {

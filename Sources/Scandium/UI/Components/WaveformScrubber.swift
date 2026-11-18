@@ -30,9 +30,9 @@ struct WaveformScrubber: View {
 
     private let barSpacing: CGFloat = 1.5
     private let minBarHeight: CGFloat = 2
-    private let playedColor = Color.white
-    private let unplayedColor = Color.white.opacity(0.18)
-    private let bufferedColor = Color.white.opacity(0.10)
+    private let playedColor = Color.primary
+    private let unplayedColor = Color.primary.opacity(0.18)
+    private let bufferedColor = Color.primary.opacity(0.10)
     private let barCornerRadius: CGFloat = 1
 
     var body: some View {
@@ -94,7 +94,7 @@ struct WaveformScrubber: View {
 
     private func scrubberIndicator(totalHeight: CGFloat, totalWidth: CGFloat, progress: Double) -> some View {
         RoundedRectangle(cornerRadius: 2)
-            .fill(Color.white)
+            .fill(Color.primary)
             .frame(width: 3, height: totalHeight + 8)
             .offset(x: CGFloat(progress) * totalWidth - 1.5)
             .animation(.interactiveSpring(), value: progress)
@@ -167,19 +167,19 @@ struct SimpleProgressScrubber: View {
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.white.opacity(0.12))
+                    .fill(Color.primary.opacity(0.12))
                     .frame(height: 4)
 
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.primary.opacity(0.08))
                     .frame(width: CGFloat(bufferedProgress) * totalWidth, height: 4)
 
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.white)
+                    .fill(Color.primary)
                     .frame(width: CGFloat(activeProgress) * totalWidth, height: 4)
 
                 Circle()
-                    .fill(Color.white)
+                    .fill(Color.primary)
                     .frame(width: isDragging ? 16 : 10, height: isDragging ? 16 : 10)
                     .offset(x: CGFloat(activeProgress) * totalWidth - (isDragging ? 8 : 5))
                     .animation(.interactiveSpring(), value: isDragging)
