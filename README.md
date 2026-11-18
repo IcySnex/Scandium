@@ -10,7 +10,7 @@ This is a fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium).
 - **Home like soundcloud.com.** The home page shows SoundCloud's personalized sections (Made for you, mixes, stations, recently played) and loads once per launch.
 - **Native iOS look and feel.** Tabs, large titles, the search field and back swipes are the system ones.
 - **Queue and shuffle.** Tapping any track plays the whole list from there. Shuffle and Play All set the shuffle switch, and turning shuffle off restores the original order.
-- **Audio quality.** Standard plays the smallest stream (128 kbps MP3 or 96 kbps AAC); High plays 160 kbps AAC; Best plays 256 kbps for SoundCloud Go+ accounts. Copy-protected tracks, which iOS can't play, are greyed out and left out of the queue.
+- **Audio quality.** Standard plays the smallest stream (128 kbps MP3 or 96 kbps AAC); High plays 160 kbps AAC; Best plays 256 kbps (SoundCloud Go+ accounts). Copy-protected tracks, which this can't play, are greyed out and left out of the queue.
 - **Light on battery.** No animated backgrounds, looping animations or background redraws; images decode off the main thread.
 
 ## Installing
