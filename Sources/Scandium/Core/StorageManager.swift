@@ -30,27 +30,6 @@ final class StorageManager: ObservableObject {
     var formattedAudioNetwork: String {
         formatBytes(audioNetworkBytes)
     }
-
-    var formattedUserData: String {
-        formatBytes(userDataBytes)
-    }
-
-    /// Ratio (0.0 ... 1.0) for visual distribution bar
-    var imageRatio: Double {
-        guard totalBytes > 0 else { return 0 }
-        return Double(imageCacheBytes) / Double(totalBytes)
-    }
-
-    var audioRatio: Double {
-        guard totalBytes > 0 else { return 0 }
-        return Double(audioNetworkBytes) / Double(totalBytes)
-    }
-
-    var userRatio: Double {
-        guard totalBytes > 0 else { return 0 }
-        return Double(userDataBytes) / Double(totalBytes)
-    }
-
     // MARK: - Calculate Usage
 
     func refreshUsage() {

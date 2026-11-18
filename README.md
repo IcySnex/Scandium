@@ -2,40 +2,40 @@
 
 ![iOS 15.0+](https://img.shields.io/badge/iOS-15.0%2B-000000) ![License](https://img.shields.io/badge/license-GPL--3.0-000000)
 
-Native SoundCloud client for legacy and modern iOS.
+A native SoundCloud client for iOS 15 and later, tuned for older iPhones such as the first-generation iPhone SE.
 
-Install via TrollStore or sideloading, open it, and stream directly without ads or web wrappers. Scandium is built from scratch in SwiftUI for iOS 15.0 and later:
+This is a fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium). It keeps the original's audio engine and client ID detection and changes the rest:
 
-- **Native Audio Engine.** Streams progressive MP3 (128kbps) and HLS AAC (256kbps) directly through `AVFoundation`. Supports background playback, Lock Screen and Control Center integration (`MPNowPlayingInfoCenter`, `MPRemoteCommandCenter`), variable playback speeds (`0.8x` to `2.0x`), and continuous autoplay queues.
-- **Dynamic Client ID Extraction.** Automatically scrapes and caches valid 32-character SoundCloud v2 `client_id` tokens from public web bundles with multi-tier fallbacks and manual override support—no hardcoded credentials required.
-- **Account Sync & Local Library.** Sign in via Web OAuth, token, or profile URL to sync your liked tracks, playlists, albums, and followed artists, backed by a two-tier memory and disk cache for instant startup.
-- **Linux Cross-Compilation.** Designed to compile without macOS or Xcode using `xtool` and the Darwin Swift SDK, complete with automated Mach-O weak-link patching (`SwiftUICore`) for backward compatibility down to iOS 15.
+- **Your SoundCloud account, both ways.** Every liked track and playlist is loaded, however many you have. Liking or unliking a track saves it to your account immediately, and the library syncs once at launch or when you pull to refresh.
+- **Home like soundcloud.com.** The home page shows SoundCloud's personalized sections (Made for you, mixes, stations, recently played) and loads once per launch.
+- **Standard iOS navigation.** Tabs, large titles, the search field and back swipes are the system ones, so pages stack and keep their place.
+- **Queue and shuffle that agree.** Tapping any track plays the whole list from there. Shuffle and Play All set the shuffle switch, and turning shuffle off restores the original order.
+- **Light on battery.** No animated backgrounds, looping animations or background redraws; images decode off the main thread.
 
-## Screenshots
+## Signing in
 
-| <img src="assets/screenshots/home.png" width="220" alt="Home"> | <img src="assets/screenshots/player.png" width="220" alt="Player"> | <img src="assets/screenshots/library.png" width="220" alt="Library"> | <img src="assets/screenshots/settings.png" width="220" alt="Settings"> |
-| :---: | :---: | :---: | :---: |
-| Home & Discovery | Now Playing | Library | Settings |
+In **Profile** you can:
 
-## Installation
+- **Sign in to SoundCloud** in a web view. This is the normal option: likes sync both ways.
+- **Sign in with a token** by pasting an OAuth token (Profile shows how to find it).
+- **Load a public profile** from a soundcloud.com link. This is read-only: likes you change stay on the phone.
 
-1. Download the latest `Scandium.ipa` from [Releases](https://github.com/MeoHunterr/Scandium/releases).
-2. Install using **TrollStore** (recommended for unsandboxed persistence) or sideload via Sideloadly / AltStore.
+## Building
 
-## Building from Source
+On macOS with Xcode installed:
 
-Requires **Swift 6.4+** and **[xtool](https://xtool.sh)** configured with the iOS Darwin SDK on Linux or macOS:
+    ./scripts/build_ipa_macos.sh
 
-    git clone https://github.com/MeoHunterr/Scandium.git
-    cd Scandium
+This compiles with Xcode's `swiftc`, weak-links frameworks newer than iOS 15, ad-hoc signs the app and writes `Scandium.ipa` to the project root. Install it with TrollStore or a sideloading tool. The version comes from `Info.plist`.
+
+On Linux, or on macOS without Xcode, the original [xtool](https://xtool.sh) build still works:
+
     python3 scripts/prebuild_audit.py
     ./scripts/build_ipa.sh
 
-The packaged `Scandium.ipa` will be generated in the project root.
-
 ## Disclaimer
 
-Scandium is an independent open-source project developed for educational and personal use to support legacy iOS devices. It is not affiliated with, endorsed by, or connected to SoundCloud.
+Scandium is an independent open-source project for personal use. It is not affiliated with, endorsed by, or connected to SoundCloud.
 
 ## License
 

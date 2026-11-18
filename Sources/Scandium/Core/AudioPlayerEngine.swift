@@ -343,19 +343,6 @@ final class AudioPlayerEngine: ObservableObject {
         player.volume = clamped
         playbackVolume = clamped
     }
-
-    func stop() {
-        player.pause()
-        player.replaceCurrentItem(with: nil)
-        cancellables.removeAll()
-        playerItem = nil
-        playbackState = .idle
-        currentTime = 0
-        duration = 0
-        bufferedTime = 0
-        clearNowPlayingInfo()
-    }
-
     /// Seeks to a specific time in seconds.
     func seek(to time: TimeInterval) {
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
@@ -435,16 +422,6 @@ final class AudioPlayerEngine: ObservableObject {
     func enqueue(_ track: Track) {
         queue.append(track)
         sourceQueue.append(track)
-    }
-
-    /// Inserts a track to play right after the current one.
-    func playNext(_ track: Track) {
-        queue.insert(track, at: min(currentIndex + 1, queue.count))
-        if let current = currentTrack, let sourceIndex = sourceQueue.firstIndex(where: { $0.id == current.id }) {
-            sourceQueue.insert(track, at: sourceIndex + 1)
-        } else {
-            sourceQueue.append(track)
-        }
     }
 
     // MARK: - Clock
@@ -754,27 +731,6 @@ final class AudioPlayerEngine: ObservableObject {
     var bufferProgress: Double {
         guard duration > 0 else { return 0 }
         return min(bufferedTime / duration, 1.0)
-    }
-
-    /// Whether there is a next track in the queue.
-    var hasNextTrack: Bool {
-        !queue.isEmpty && currentIndex + 1 < queue.count
-    }
-
-    /// Whether there is a previous track in the queue (or current time > 3s to restart).
-    var hasPreviousTrack: Bool {
-        currentTime > 3.0 || (!queue.isEmpty && currentIndex > 0)
-    }
-
-    /// Formatted current time string.
-    var formattedCurrentTime: String {
-        Track.formatDuration(currentTime)
-    }
-
-    /// Formatted remaining time string.
-    var formattedRemainingTime: String {
-        let remaining = max(0, duration - currentTime)
-        return "-" + Track.formatDuration(remaining)
     }
 
     /// Formatted total duration string.

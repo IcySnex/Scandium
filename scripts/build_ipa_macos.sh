@@ -19,7 +19,8 @@ IPA="${PROJECT_ROOT}/${APP_NAME}.ipa"
 
 cd "${PROJECT_ROOT}"
 VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
-SHORT_VERSION="1.3.0"
+# The version lives in Info.plist
+SHORT_VERSION="$(plutil -extract CFBundleShortVersionString raw Info.plist)"
 
 rm -rf "${BUILD_DIR}"
 mkdir -p "${APP}"
@@ -46,8 +47,6 @@ set_key CFBundleName -string "${APP_NAME}"
 set_key CFBundlePackageType -string APPL
 set_key CFBundleInfoDictionaryVersion -string 6.0
 set_key CFBundleDevelopmentRegion -string en
-set_key CFBundleShortVersionString -string "${SHORT_VERSION}"
-set_key CFBundleVersion -string "${SHORT_VERSION}"
 set_key MinimumOSVersion -string "${MIN_IOS}"
 set_key LSRequiresIPhoneOS -bool YES
 plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' "$P"

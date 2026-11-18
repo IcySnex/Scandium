@@ -68,18 +68,6 @@ final class SoundCloudAPI: ObservableObject {
 
     // MARK: - Resolve Track by ID
 
-    /// Fetches a single track by its numeric ID.
-    func getTrack(id: Int) async throws -> Track {
-        let clientID = try await scraper.getClientID()
-        let urlString = "\(Self.baseURL)/tracks/\(id)?client_id=\(clientID)"
-
-        return try await performRequest(
-            urlString: urlString,
-            decodeAs: Track.self,
-            retryCount: 0
-        )
-    }
-
     // MARK: - User & Authentication API
 
     /// Resolves any SoundCloud URL (e.g. soundcloud.com/username or track permalink)
@@ -290,22 +278,6 @@ final class SoundCloudAPI: ObservableObject {
         return "\(href)\(separator)client_id=\(clientID)"
     }
 
-    /// Fetches a specific playlist and its tracks
-    func getPlaylist(id: Int, oauthToken: String? = nil) async throws -> SoundCloudPlaylist {
-        let clientID = try await scraper.getClientID()
-        let urlString = "\(Self.baseURL)/playlists/\(id)?client_id=\(clientID)"
-        var headers: [String: String]? = nil
-        if let token = oauthToken, !token.isEmpty {
-            headers = ["Authorization": "OAuth \(token)"]
-        }
-        return try await performRequest(
-            urlString: urlString,
-            decodeAs: SoundCloudPlaylist.self,
-            headers: headers,
-            retryCount: 0
-        )
-    }
-
     /// Fetches artists/users followed by the user
     func getUserFollowings(userID: Int, oauthToken: String? = nil, limit: Int = 30) async throws -> [SoundCloudUser] {
         let clientID = try await scraper.getClientID()
@@ -340,29 +312,6 @@ final class SoundCloudAPI: ObservableObject {
             retryCount: 0
         )
         return response.collection
-    }
-
-    /// Fetches the authenticated user's stream / feed
-    func getUserStream(oauthToken: String, limit: Int = 20) async throws -> [Track] {
-        let clientID = try await scraper.getClientID()
-        let urlString = "\(Self.baseURL)/stream?client_id=\(clientID)&limit=\(limit)"
-        let headers = ["Authorization": "OAuth \(oauthToken)"]
-
-        let data = try await performRawRequest(urlString: urlString, headers: headers)
-        if let direct = try? JSONDecoder().decode(SearchResponse.self, from: data) {
-            return direct.collection
-        }
-
-        struct StreamItem: Codable {
-            let track: Track?
-        }
-        struct StreamResponse: Codable {
-            let collection: [StreamItem]
-        }
-        if let streamRes = try? JSONDecoder().decode(StreamResponse.self, from: data) {
-            return streamRes.collection.compactMap { $0.track }
-        }
-        return []
     }
 
     // MARK: - Generic Networking Helper

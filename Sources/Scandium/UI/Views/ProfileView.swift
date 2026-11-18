@@ -15,7 +15,7 @@ struct ProfileView: View {
     @State private var showClearCacheConfirm = false
     @State private var toastMessage: String?
 
-    private static let sourceURL = URL(string: "https://github.com/MeoHunterr/Scandium")!
+    private static let sourceURL = URL(string: "https://github.com/MeoHunterr/Scandium")
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
@@ -282,8 +282,10 @@ struct ProfileView: View {
 
                 SettingsDivider()
 
-                Link(destination: Self.sourceURL) {
-                    SettingsRowLabel(icon: nil, title: "Source Code", subtitle: "Scandium by MeoHunter · GPL-3.0", trailingIcon: "arrow.up.right")
+                if let sourceURL = Self.sourceURL {
+                    Link(destination: sourceURL) {
+                        SettingsRowLabel(icon: nil, title: "Source Code", subtitle: "Scandium by MeoHunter · GPL-3.0", trailingIcon: "arrow.up.right")
+                    }
                 }
             }
 

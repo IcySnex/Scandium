@@ -77,9 +77,9 @@ struct FloatingMiniPlayer: View {
                 // Bottom 2pt progress line: the only part that redraws while playing
                 MiniPlayerProgressLine(clock: player.clock, duration: player.duration)
             }
-            // Solid fill: a live blur behind it would be re-rendered on
-            // every scroll frame
-            .background(ScandiumTheme.surfaceElevated)
+            // System material like the tab bar. The blur only costs GPU time
+            // while content scrolls underneath it.
+            .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

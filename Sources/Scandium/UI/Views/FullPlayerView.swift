@@ -350,11 +350,12 @@ struct FullPlayerView: View {
             do {
                 let samples = try await api.getWaveformData(for: track)
                 await MainActor.run {
-                    self.waveformSamples = samples
+                    // Ignore a waveform that arrives after the track changed
+                    if player.currentTrack?.id == track.id { self.waveformSamples = samples }
                 }
             } catch {
                 await MainActor.run {
-                    self.waveformSamples = []
+                    if player.currentTrack?.id == track.id { self.waveformSamples = [] }
                 }
             }
         }

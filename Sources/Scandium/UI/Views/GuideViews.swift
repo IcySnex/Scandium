@@ -114,7 +114,6 @@ private struct GuideStep: View {
                 Text(detail)
                     .font(.system(size: 13))
                     .foregroundColor(ScandiumTheme.subtext)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)

@@ -59,12 +59,6 @@ final class LibraryManager: ObservableObject {
         recordEdit(track: track, liked: false)
         pushRemoteLike(false, track: track, restoreIndex: index)
     }
-
-    func clearLikedTracks() {
-        likedTracks.removeAll()
-        saveLikedTracks()
-    }
-
     /// Replaces the synced portion of the liked list with the remote likes, in
     /// SoundCloud's order (newest first). Tracks liked only inside the app stay
     /// on top; tracks that came from an earlier sync but are no longer liked on
