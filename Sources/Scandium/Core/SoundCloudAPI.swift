@@ -382,72 +382,99 @@ final class SoundCloudAPI: ObservableObject {
     }
 
     /// Resolves the direct stream URL for a track.
-    /// Prioritizes progressive (direct MP3) over HLS for lower CPU overhead on legacy devices.
+    /// Standard quality prefers the smallest stream (128 kbps MP3, else 96 kbps
+    /// AAC); High Quality prefers 160 kbps AAC, or 256 kbps with Go+.
     func resolveStreamURL(for track: Track) async throws -> URL {
         guard let transcodings = track.media?.transcodings, !transcodings.isEmpty else {
             throw APIError.noTranscodings
         }
+        // Encrypted (DRM) streams can't be played by AVPlayer; tracks that
+        // only offer those fail right away instead of trying each one
+        let playable = transcodings.filter { $0.isProgressive || $0.isHLS }
+        guard !playable.isEmpty else { throw APIError.noStreamURL }
 
-        let sorted = prioritizeTranscodings(transcodings)
-
-        var lastError: Error = APIError.noStreamURL
-
-        for transcoding in sorted {
-            do {
-                let streamURL = try await fetchStreamURL(from: transcoding)
-                return streamURL
-            } catch {
-                lastError = error
-                continue
-            }
+        let preferHighQuality = AppSettings.shared.highQualityAudio
+        let token = SoundCloudAuthManager.shared.oauthToken
+        let sorted = playable.sorted {
+            transcodingPriority($0, preferHighQuality: preferHighQuality)
+                > transcodingPriority($1, preferHighQuality: preferHighQuality)
         }
 
+        var lastError: Error = APIError.noStreamURL
+        for transcoding in sorted {
+            let isGoPlus = transcoding.quality == "hq"
+            // Go+ streams need the track's authorization and a signed-in account
+            if isGoPlus && (track.trackAuthorization == nil || token == nil) { continue }
+            do {
+                return try await fetchStreamURL(
+                    from: transcoding,
+                    trackAuthorization: track.trackAuthorization,
+                    oauthToken: isGoPlus ? token : nil,
+                    // A refused Go+ stream must not trigger a client ID re-scrape
+                    allowClientIDRefresh: !isGoPlus
+                )
+            } catch {
+                lastError = error
+            }
+        }
         throw lastError
     }
 
-    /// Sorts transcodings to prefer progressive MP3, then HLS, then others.
-    /// Within the same protocol, prefers audio/mpeg over opus.
-    private func prioritizeTranscodings(_ transcodings: [Transcoding]) -> [Transcoding] {
-        transcodings.sorted { a, b in
-            let scoreA = transcodingPriority(a)
-            let scoreB = transcodingPriority(b)
-            return scoreA > scoreB
-        }
-    }
+    /// Ranks the stream formats SoundCloud offers for a track. Presets seen:
+    /// mp3 (128 kbps, progressive or HLS), aac_96k, aac_160k, abr_sq
+    /// (adaptive AAC), Go+ "hq" AAC 256 kbps, and Ogg Opus.
+    private func transcodingPriority(_ transcoding: Transcoding, preferHighQuality: Bool) -> Int {
+        let mime = transcoding.format.mimeType
+        // AVPlayer can't play Ogg Opus; keep it as a last resort only
+        if mime.contains("ogg") || mime.contains("opus") { return 0 }
 
-    private func transcodingPriority(_ transcoding: Transcoding) -> Int {
+        let preset = transcoding.preset ?? ""
+        // "audio/mpegurl" is a playlist type, not MP3
+        let isMP3 = mime.hasPrefix("audio/mpeg") && !mime.contains("mpegurl")
+        let isGoPlus = transcoding.quality == "hq"
         var score = 0
-
+        if preferHighQuality {
+            if isGoPlus { score += 1000 }
+            if preset.contains("160") { score += 500 }
+            else if preset.hasPrefix("abr") { score += 400 }
+            else if isMP3 { score += 300 }
+            else if preset.contains("96") { score += 200 }
+        } else {
+            // Smallest stream first: least data and battery
+            if isMP3 { score += 500 }
+            else if preset.contains("96") { score += 400 }
+            else if preset.hasPrefix("abr") { score += 300 }
+            else if preset.contains("160") { score += 200 }
+            if isGoPlus { score -= 150 }
+        }
         if transcoding.isProgressive {
             score += 100
         } else if transcoding.isHLS {
             score += 50
         }
-
-        if transcoding.format.mimeType.contains("mpeg") {
-            score += 20
-        } else if transcoding.format.mimeType.contains("ogg") || transcoding.format.mimeType.contains("opus") {
-            score += 10
-        }
-
-        if transcoding.quality == "hq" {
-            score += 5
-        }
-
         return score
     }
 
     /// Fetches the actual media URL from a transcoding endpoint.
     /// The transcoding URL returns JSON `{ "url": "https://cf-media.sndcdn.com/..." }`.
-    private func fetchStreamURL(from transcoding: Transcoding) async throws -> URL {
+    private func fetchStreamURL(
+        from transcoding: Transcoding,
+        trackAuthorization: String?,
+        oauthToken: String?,
+        allowClientIDRefresh: Bool
+    ) async throws -> URL {
         let clientID = try await scraper.getClientID()
         let separator = transcoding.url.contains("?") ? "&" : "?"
-        let urlString = "\(transcoding.url)\(separator)client_id=\(clientID)"
+        var urlString = "\(transcoding.url)\(separator)client_id=\(clientID)"
+        if let auth = trackAuthorization?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            urlString += "&track_authorization=\(auth)"
+        }
 
         let response: StreamURLResponse = try await performRequest(
             urlString: urlString,
             decodeAs: StreamURLResponse.self,
-            retryCount: 0
+            headers: Self.authHeaders(oauthToken),
+            retryCount: allowClientIDRefresh ? 0 : Self.maxRetries
         )
 
         guard let streamURL = URL(string: response.url) else {

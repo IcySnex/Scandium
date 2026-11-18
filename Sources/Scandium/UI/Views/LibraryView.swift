@@ -99,7 +99,7 @@ struct LibraryView: View {
     private var likedSection: some View {
         if library.likedTracks.isEmpty {
             emptyState(auth.canSyncLikes
-                       ? "No liked songs yet. Swipe left on a song or tap its heart to like it."
+                       ? "No liked songs yet. Tap the heart on a song to like it."
                        : "Sign in to SoundCloud in Profile to see your liked songs.")
         } else {
             PlayShuffleButtons(tracks: library.likedTracks)

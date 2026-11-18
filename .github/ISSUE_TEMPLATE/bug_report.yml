@@ -54,8 +54,8 @@ body:
     id: version
     attributes:
       label: "Scandium version"
-      description: "Shown under Profile → About → Version, for example 2.2.4."
-      placeholder: "2.2.4"
+      description: "Shown under Profile → About → Version, for example 2.2.5."
+      placeholder: "2.2.5"
     validations:
       required: true
 

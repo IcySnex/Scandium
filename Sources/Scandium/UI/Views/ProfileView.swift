@@ -161,10 +161,11 @@ struct ProfileView: View {
     // MARK: - Playback
 
     private var playbackSection: some View {
-        Section(header: Text("Playback"), footer: Text("Autoplay keeps playing similar tracks when the queue ends.")) {
+        Section(header: Text("Playback"), footer: Text("High Quality Audio streams 160 kbps AAC (256 kbps with SoundCloud Go+) instead of the smaller standard stream, using more data and a little more battery. It applies from the next track. Autoplay keeps playing similar tracks when the queue ends.")) {
             Toggle("Autoplay Similar Tracks", isOn: $settings.autoPlayRelated)
             Toggle("Pause When Headphones Disconnect", isOn: $settings.pauseOnHeadphoneDisconnect)
             Toggle("Skip Tracks That Fail to Play", isOn: $settings.autoSkipOnError)
+            Toggle("High Quality Audio", isOn: $settings.highQualityAudio)
             Toggle("Waveform Scrubber", isOn: $settings.showWaveform)
             Toggle("Keep Screen Awake", isOn: $settings.keepScreenAwake)
             Toggle("Haptic Feedback", isOn: $settings.enableHaptics)

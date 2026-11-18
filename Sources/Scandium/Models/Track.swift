@@ -49,6 +49,8 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     let publisherMetadata: PublisherMetadata?
     let stationURN: String?
     let stationPermalink: String?
+    /// Needed to request high-quality (Go+) streams
+    let trackAuthorization: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, description, duration, genre, uri, urn, kind, permalink, streamable, downloadable, media, user
@@ -66,6 +68,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         case publisherMetadata = "publisher_metadata"
         case stationURN = "station_urn"
         case stationPermalink = "station_permalink"
+        case trackAuthorization = "track_authorization"
     }
 
     static func == (lhs: Track, rhs: Track) -> Bool {

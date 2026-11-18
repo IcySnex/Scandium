@@ -37,8 +37,9 @@ public enum AppThemeMode: String, CaseIterable, Identifiable {
 }
 
 public enum AppAccentColor: String, CaseIterable, Identifiable {
-    case green
+    // Orange (the default) comes first in the accent picker
     case orange
+    case green
     case cyan
     case purple
 
@@ -143,6 +144,11 @@ public final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(showWaveform, forKey: "scandium_show_waveform") }
     }
 
+    /// Prefer 160 kbps AAC (256 kbps with Go+) over the smaller standard stream
+    @Published public var highQualityAudio: Bool {
+        didSet { UserDefaults.standard.set(highQualityAudio, forKey: "scandium_high_quality_audio") }
+    }
+
     @Published public var enableHaptics: Bool {
         didSet { UserDefaults.standard.set(enableHaptics, forKey: "scandium_enable_haptics") }
     }
@@ -155,13 +161,16 @@ public final class AppSettings: ObservableObject {
         let defaults = UserDefaults.standard
 
         themeMode = AppThemeMode(rawValue: defaults.string(forKey: "scandium_theme_mode") ?? "") ?? .dark
-        accentColor = AppAccentColor(rawValue: defaults.string(forKey: "scandium_accent_color") ?? "") ?? .green
+        accentColor = AppAccentColor(rawValue: defaults.string(forKey: "scandium_accent_color") ?? "") ?? .orange
 
         autoPlayRelated = defaults.object(forKey: "scandium_autoplay_related") as? Bool ?? true
         keepScreenAwake = defaults.bool(forKey: "scandium_keep_screen_awake")
         pauseOnHeadphoneDisconnect = defaults.object(forKey: "scandium_pause_on_headphone_disconnect") as? Bool ?? true
         autoSkipOnError = defaults.object(forKey: "scandium_auto_skip_on_error") as? Bool ?? true
-        showWaveform = defaults.object(forKey: "scandium_show_waveform") as? Bool ?? true
+        // Off by default: the system slider; the waveform is optional
+        showWaveform = defaults.object(forKey: "scandium_show_waveform") as? Bool ?? false
+        // Off by default: the smaller stream costs less battery and data
+        highQualityAudio = defaults.bool(forKey: "scandium_high_quality_audio")
         enableHaptics = defaults.object(forKey: "scandium_enable_haptics") as? Bool ?? true
 
         if keepScreenAwake {

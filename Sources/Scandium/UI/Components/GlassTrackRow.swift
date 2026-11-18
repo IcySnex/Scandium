@@ -101,16 +101,6 @@ struct GlassTrackRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-        // Swipe left to like / unlike (only inside a List)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if showLikeButton && auth.canSyncLikes {
-                let isLiked = library.isLiked(track: track)
-                Button(action: { library.toggleLike(track: track) }) {
-                    Label(isLiked ? "Unlike" : "Like", systemImage: isLiked ? "heart.slash.fill" : "heart.fill")
-                }
-                .tint(.accentColor)
-            }
-        }
     }
 
     // MARK: - Now Playing Indicator
