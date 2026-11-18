@@ -65,6 +65,7 @@ codesign --force --sign - --entitlements entitlements.plist --timestamp=none "${
 
 echo "[5/5] Packaging ${IPA}..."
 rm -f "${IPA}"
-(cd "${BUILD_DIR}" && zip -qry "${IPA}" Payload)
+# -X: no extra file attributes (owner IDs, macOS metadata) in the archive
+(cd "${BUILD_DIR}" && zip -qryX "${IPA}" Payload)
 
 echo "Done (${VERSION}): ${IPA} ($(du -h "${IPA}" | cut -f1))"

@@ -4,7 +4,7 @@
 
 A native SoundCloud client for iOS 15 and later, tuned for older iPhones such as the first-generation iPhone SE.
 
-This is a fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium). It keeps the original's audio engine and client ID detection and changes the rest:
+This is [IcySnex](https://github.com/IcySnex)'s fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium). It keeps the original's audio engine and client ID detection and changes the rest:
 
 - **Your SoundCloud account, both ways.** Every liked track and playlist is loaded, however many you have. Liking or unliking a track saves it to your account immediately, and the library syncs once at launch or when you pull to refresh.
 - **Home like soundcloud.com.** The home page shows SoundCloud's personalized sections (Made for you, mixes, stations, recently played) and loads once per launch.
@@ -12,13 +12,17 @@ This is a fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium).
 - **Queue and shuffle that agree.** Tapping any track plays the whole list from there. Shuffle and Play All set the shuffle switch, and turning shuffle off restores the original order.
 - **Light on battery.** No animated backgrounds, looping animations or background redraws; images decode off the main thread.
 
+## Installing
+
+Download `Scandium.ipa` from [Releases](https://github.com/IcySnex/Scandium/releases) and install it with [TrollStore](https://github.com/opa334/TrollStore) or a sideloading tool such as [Sideloadly](https://sideloadly.io) or AltStore, which signs it with your own Apple ID. The IPA itself is unsigned (ad-hoc), so it can't be installed directly.
+
 ## Signing in
 
 In **Profile** you can:
 
 - **Sign in to SoundCloud** in a web view. This is the normal option: likes sync both ways.
 - **Sign in with a token** by pasting an OAuth token (Profile shows how to find it).
-- **Load a public profile** from a soundcloud.com link. This is read-only: likes you change stay on the phone.
+- **Load a public profile** from a soundcloud.com link. This is read-only, so liking is turned off.
 
 ## Building
 
@@ -32,6 +36,11 @@ On Linux, or on macOS without Xcode, the original [xtool](https://xtool.sh) buil
 
     python3 scripts/prebuild_audit.py
     ./scripts/build_ipa.sh
+
+## Credits
+
+- **IcySnex**: this fork.
+- **MeoHunter**: the original [Scandium](https://github.com/MeoHunterr/Scandium).
 
 ## Disclaimer
 

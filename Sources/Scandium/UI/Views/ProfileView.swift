@@ -15,7 +15,8 @@ struct ProfileView: View {
     @State private var showClearCacheConfirm = false
     @State private var toastMessage: String?
 
-    private static let sourceURL = URL(string: "https://github.com/MeoHunterr/Scandium")
+    private static let sourceURL = URL(string: "https://github.com/IcySnex/Scandium")
+    private static let originalURL = URL(string: "https://github.com/MeoHunterr/Scandium")
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
@@ -236,20 +237,26 @@ struct ProfileView: View {
                 Spacer()
                 Text(appVersion).foregroundColor(.secondary)
             }
-            if let sourceURL = Self.sourceURL {
-                Link(destination: sourceURL) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Source Code").foregroundColor(.primary)
-                            Text("Scandium by MeoHunter · GPL-3.0")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
+            linkRow("Source Code", detail: "By IcySnex · GPL-3.0", url: Self.sourceURL)
+            linkRow("Based On", detail: "Scandium by MeoHunter", url: Self.originalURL)
+        }
+    }
+
+    @ViewBuilder
+    private func linkRow(_ title: String, detail: String, url: URL?) -> some View {
+        if let url = url {
+            Link(destination: url) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).foregroundColor(.primary)
+                        Text(detail)
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
             }
         }
