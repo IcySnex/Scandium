@@ -349,10 +349,18 @@ final class SoundCloudAPI: ObservableObject {
         )
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let headers = headers {
-            for (key, val) in headers {
-                request.setValue(val, forHTTPHeaderField: key)
-            }
+        // Signed-in requests always use the current access token, renewed
+        // first if it is about to expire
+        var headers = headers ?? [:]
+        let sentToken: String?
+        if headers["Authorization"] != nil, let token = await SoundCloudAuthManager.shared.validAccessToken() {
+            headers["Authorization"] = "OAuth \(token)"
+            sentToken = token
+        } else {
+            sentToken = nil
+        }
+        for (key, val) in headers {
+            request.setValue(val, forHTTPHeaderField: key)
         }
         request.timeoutInterval = 15
 
@@ -360,6 +368,17 @@ final class SoundCloudAPI: ObservableObject {
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
+        }
+
+        // A rejected access token: renew it once and retry
+        if httpResponse.statusCode == 401, let sentToken = sentToken, retryCount < Self.maxRetries,
+           await SoundCloudAuthManager.shared.renewAccessToken(replacing: sentToken) != nil {
+            return try await performRawRequest(
+                urlString: urlString,
+                method: method,
+                headers: headers,
+                retryCount: retryCount + 1
+            )
         }
 
         if (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) && retryCount < Self.maxRetries {
@@ -379,6 +398,57 @@ final class SoundCloudAPI: ObservableObject {
         }
 
         return data
+    }
+
+    // MARK: - Session Refresh
+
+    enum TokenRefreshError: Error {
+        /// SoundCloud no longer accepts the refresh token: sign in again
+        case rejected
+        /// Network or server trouble: try again later
+        case unavailable
+    }
+
+    /// Trades a refresh token for a new access token, the way soundcloud.com
+    /// keeps its session alive. The refresh token is single use; the
+    /// response carries the next one.
+    func refreshAccessToken(refreshToken: String, clientID: String?) async throws -> (accessToken: String, refreshToken: String?) {
+        guard let url = URL(string: "https://secure.soundcloud.com/oauth/token") else {
+            throw TokenRefreshError.unavailable
+        }
+        var resolvedClientID = clientID
+        if resolvedClientID == nil {
+            resolvedClientID = try? await scraper.getClientID()
+        }
+        guard let clientID = resolvedClientID else { throw TokenRefreshError.unavailable }
+
+        var form = URLComponents()
+        form.queryItems = [
+            URLQueryItem(name: "client_id", value: clientID),
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refreshToken),
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // "+" in a form body means a space, so encode it
+        request.httpBody = form.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+            .data(using: .utf8)
+        request.timeoutInterval = 15
+
+        guard let (data, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse else {
+            throw TokenRefreshError.unavailable
+        }
+        if [400, 401, 403].contains(http.statusCode) { throw TokenRefreshError.rejected }
+        guard (200...299).contains(http.statusCode),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let accessToken = json["access_token"] as? String, !accessToken.isEmpty else {
+            throw TokenRefreshError.unavailable
+        }
+        return (accessToken, json["refresh_token"] as? String)
     }
 
     /// Resolves the direct stream URL for a track.

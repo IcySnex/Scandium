@@ -3,6 +3,7 @@
 
 import Foundation
 import Combine
+import WebKit
 
 final class SoundCloudAuthManager: ObservableObject {
     static let shared = SoundCloudAuthManager()
@@ -19,11 +20,14 @@ final class SoundCloudAuthManager: ObservableObject {
     @Published private(set) var userLikedTracks: [Track] = []
     @Published private(set) var isLoading: Bool = false
     @Published var errorMessage: String?
+    /// SoundCloud no longer accepts the saved sign-in; the user has to sign in again
+    @Published private(set) var sessionExpired: Bool = false
 
     // MARK: - Storage Keys
 
     private let legacyTokenKey = "scandium_soundcloud_oauth_token"
     private let scOAuthTokenKey = "sc_oauth_token"
+    private let scRefreshTokenKey = "sc_oauth_refresh_token"
     private let userKey = "scandium_soundcloud_current_user"
     private let playlistsKey = "scandium_soundcloud_user_playlists"
     private let followingsKey = "scandium_soundcloud_user_followings"
@@ -113,11 +117,21 @@ final class SoundCloudAuthManager: ObservableObject {
 
     // MARK: - Save OAuth Token
 
+    /// - Parameter refreshToken: the `oauth_refresh_token` cookie from the
+    ///   sign-in page, used to renew the short-lived access token. A token
+    ///   pasted by hand has none and stops working when it expires.
     @MainActor
-    func saveToken(_ token: String) {
-        let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+    func saveToken(_ token: String, refreshToken: String? = nil) {
+        var cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanToken.hasPrefix("OAuth ") { cleanToken.removeFirst("OAuth ".count) }
         guard !cleanToken.isEmpty else { return }
 
+        if let refresh = refreshToken, !refresh.isEmpty {
+            KeychainHelper.saveString(key: scRefreshTokenKey, value: refresh)
+        } else {
+            KeychainHelper.delete(key: scRefreshTokenKey)
+        }
+        sessionExpired = false
         KeychainHelper.saveString(key: scOAuthTokenKey, value: cleanToken)
         UserDefaults.standard.removeObject(forKey: scOAuthTokenKey)
         UserDefaults.standard.removeObject(forKey: legacyTokenKey)
@@ -223,7 +237,7 @@ final class SoundCloudAuthManager: ObservableObject {
 
     /// True when likes made in the app can be sent to the SoundCloud account.
     var canSyncLikes: Bool {
-        currentUser != nil && !(oauthToken ?? "").isEmpty
+        currentUser != nil && !(oauthToken ?? "").isEmpty && !sessionExpired
     }
 
     /// Likes or unlikes a track on the SoundCloud account.
@@ -318,7 +332,9 @@ final class SoundCloudAuthManager: ObservableObject {
         self.userLikedTracks = []
         self.errorMessage = nil
 
+        self.sessionExpired = false
         KeychainHelper.delete(key: scOAuthTokenKey)
+        KeychainHelper.delete(key: scRefreshTokenKey)
         UserDefaults.standard.removeObject(forKey: scOAuthTokenKey)
         UserDefaults.standard.removeObject(forKey: legacyTokenKey)
         UserDefaults.standard.removeObject(forKey: userKey)
@@ -327,5 +343,127 @@ final class SoundCloudAuthManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: userLikesKey)
 
         LibraryManager.shared.syncUserPlaylists([])
+    }
+
+    // MARK: - Session Refresh
+    //
+    // soundcloud.com signs in with a short-lived access token (a JWT that
+    // lasts about a day) plus a single-use refresh token. The access token
+    // is renewed shortly before it expires, or after a request is rejected.
+
+    private var renewal: Task<String?, Never>?
+
+    /// Seconds before expiry at which the token is renewed ahead of time
+    private static let renewalMargin: TimeInterval = 5 * 60
+
+    /// The access token to send, renewed first if it expires soon.
+    @MainActor
+    func validAccessToken() async -> String? {
+        guard let token = oauthToken, !token.isEmpty else { return nil }
+        if let expiry = Self.claims(of: token)?["exp"] as? Double,
+           Date(timeIntervalSince1970: expiry).timeIntervalSinceNow < Self.renewalMargin {
+            return await renewAccessToken(replacing: token) ?? token
+        }
+        return token
+    }
+
+    /// Renews the access token after `failedToken` was rejected. Returns the
+    /// new token, or nil when it can't be renewed. Concurrent callers share
+    /// one renewal, and a token that was already replaced isn't renewed again.
+    @MainActor
+    func renewAccessToken(replacing failedToken: String) async -> String? {
+        if let current = oauthToken, current != failedToken { return current }
+        if let running = renewal { return await running.value }
+        let task = Task { @MainActor in await self.performRenewal() }
+        renewal = task
+        let result = await task.value
+        renewal = nil
+        return result
+    }
+
+    @MainActor
+    private func performRenewal() async -> String? {
+        guard let api = api, let token = oauthToken else { return nil }
+        // Saved at sign-in; sign-ins from before this existed still have it
+        // in the sign-in page's cookies
+        var refreshToken = KeychainHelper.loadString(key: scRefreshTokenKey)
+        // Only if the page's session is the one this token came from (not
+        // after a token was pasted by hand)
+        if refreshToken == nil, await Self.webCookie(named: "oauth_token")?.value == token {
+            refreshToken = await Self.webCookie(named: "oauth_refresh_token")?.value
+        }
+        guard let refresh = refreshToken, !refresh.isEmpty else {
+            markSessionExpired()
+            return nil
+        }
+
+        // The web player renews with the client the token was issued to
+        let clientID = Self.claims(of: token)?["client_id"] as? String
+        do {
+            let renewed = try await api.refreshAccessToken(refreshToken: refresh, clientID: clientID)
+            // Single use: store the next refresh token before anything else
+            if let next = renewed.refreshToken, !next.isEmpty {
+                KeychainHelper.saveString(key: scRefreshTokenKey, value: next)
+            }
+            KeychainHelper.saveString(key: scOAuthTokenKey, value: renewed.accessToken)
+            oauthToken = renewed.accessToken
+            sessionExpired = false
+            await Self.updateWebCookies(accessToken: renewed.accessToken, refreshToken: renewed.refreshToken)
+            return renewed.accessToken
+        } catch SoundCloudAPI.TokenRefreshError.rejected {
+            KeychainHelper.delete(key: scRefreshTokenKey)
+            markSessionExpired()
+            return nil
+        } catch {
+            // Offline or a server hiccup: keep the session and try again later
+            return nil
+        }
+    }
+
+    @MainActor
+    private func markSessionExpired() {
+        sessionExpired = true
+        errorMessage = "Your SoundCloud sign-in expired. Sign in again in Profile."
+    }
+
+    /// The payload of a JWT access token (`exp`, `client_id`, ...), or nil
+    /// for tokens that aren't JWTs.
+    private static func claims(of token: String) -> [String: Any]? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var base64 = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    // MARK: Sign-in page cookies
+
+    @MainActor
+    private static func webCookie(named name: String) async -> HTTPCookie? {
+        await withCheckedContinuation { continuation in
+            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+                let match = cookies.first { $0.name == name && $0.domain.contains("soundcloud") && !$0.value.isEmpty }
+                continuation.resume(returning: match)
+            }
+        }
+    }
+
+    /// Writes the renewed tokens back into the sign-in page's cookies, so the
+    /// page never sends an already-used refresh token (which can make
+    /// SoundCloud end the whole session).
+    @MainActor
+    private static func updateWebCookies(accessToken: String, refreshToken: String?) async {
+        let store = WKWebsiteDataStore.default().httpCookieStore
+        for (name, value) in [("oauth_token", accessToken), ("oauth_refresh_token", refreshToken)] {
+            guard let value = value, let old = await webCookie(named: name),
+                  var properties = old.properties else { continue }
+            properties[.value] = value
+            if let renewed = HTTPCookie(properties: properties) {
+                await withCheckedContinuation { continuation in
+                    store.setCookie(renewed) { continuation.resume() }
+                }
+            }
+        }
     }
 }

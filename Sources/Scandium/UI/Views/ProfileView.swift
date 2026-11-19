@@ -94,7 +94,9 @@ struct ProfileView: View {
                         Text(user.username)
                             .font(.headline)
                             .lineLimit(1)
-                        Text(auth.canSyncLikes
+                        Text(auth.sessionExpired
+                             ? "Sign-in expired"
+                             : auth.canSyncLikes
                              ? "\(auth.userLikedTracks.count) likes · \(auth.userPlaylists.count) playlists"
                              : "Public profile · read-only")
                             .font(.subheadline)
@@ -103,6 +105,11 @@ struct ProfileView: View {
                 }
                 .padding(.vertical, 4)
 
+                if auth.sessionExpired {
+                    Button(action: { showSignIn = true }) {
+                        Label("Sign In Again", systemImage: "arrow.clockwise.circle")
+                    }
+                }
                 Button("Log Out", role: .destructive) { showLogOutConfirm = true }
             }
         } else {

@@ -187,12 +187,14 @@ struct SoundCloudLoginWebView: UIViewRepresentable {
                 if let oauthCookie = cookies.first(where: { $0.name == "oauth_token" && !$0.value.isEmpty }) {
                     self.hasCapturedToken = true
                     let tokenValue = oauthCookie.value
+                    // Renews the short-lived access token
+                    let refreshValue = cookies.first(where: { $0.name == "oauth_refresh_token" && !$0.value.isEmpty })?.value
 
                     cookieStore.remove(self)
                     self.cookieStore = nil
 
                     DispatchQueue.main.async {
-                        SoundCloudAuthManager.shared.saveToken(tokenValue)
+                        SoundCloudAuthManager.shared.saveToken(tokenValue, refreshToken: refreshValue)
                         self.parent.onLoginSuccess?()
                         self.parent.isPresented = false
                     }
