@@ -59,7 +59,9 @@ final class AudioPlayerEngine: ObservableObject {
     @Published private(set) var isShuffleEnabled: Bool = false
     /// Tracks in the order they were given (the playlist/likes order).
     private var sourceQueue: [Track] = []
-    @Published var isRepeatEnabled: Bool = false
+    /// Off, the whole queue, or the current track; saved between launches
+    @Published private(set) var repeatMode: RepeatMode =
+        RepeatMode(rawValue: UserDefaults.standard.integer(forKey: "scandium_repeat_mode")) ?? .off
     private(set) var sleepTimerRemainingSeconds: Int = 0
 
     // MARK: - Private Properties
@@ -396,39 +398,83 @@ final class AudioPlayerEngine: ObservableObject {
         }
     }
 
-    func toggleRepeat() {
-        isRepeatEnabled.toggle()
+    /// Off → repeat the queue → repeat the current track → off
+    func cycleRepeatMode() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+        UserDefaults.standard.set(repeatMode.rawValue, forKey: "scandium_repeat_mode")
     }
 
+    /// The next track in the queue. At the end it starts over only with
+    /// Repeat on; otherwise it continues with similar tracks (Autoplay) or
+    /// stops on the last track.
     func nextTrack() {
         guard !queue.isEmpty else { return }
-        let nextIndex = currentIndex + 1
-        if nextIndex < queue.count {
-            currentIndex = nextIndex
-            play(track: queue[nextIndex])
-        } else if isRepeatEnabled {
+        if currentIndex + 1 < queue.count {
+            currentIndex += 1
+            play(track: queue[currentIndex])
+        } else if repeatMode != .off {
             currentIndex = 0
             play(track: queue[0])
+        } else if AppSettings.shared.autoPlayRelated, let current = currentTrack {
+            continueWithSimilarTracks(after: current)
         } else {
-            currentIndex = 0
-            pause()
+            stopAtEndOfQueue()
+        }
+    }
+
+    /// Restarts the track when it has played for a few seconds, otherwise
+    /// goes back one track. On the first track it restarts it, unless the
+    /// queue repeats.
+    func previousTrack() {
+        guard !queue.isEmpty else { return }
+        if currentTime > 3.0 {
+            seek(to: 0)
+        } else if currentIndex > 0 {
+            currentIndex -= 1
+            play(track: queue[currentIndex])
+        } else if repeatMode == .all {
+            currentIndex = queue.count - 1
+            play(track: queue[currentIndex])
+        } else {
             seek(to: 0)
         }
     }
 
-    func previousTrack() {
-        if currentTime > 3.0 {
-            seek(to: 0)
-            return
-        }
-        guard !queue.isEmpty else { return }
-        let prevIndex = currentIndex - 1
-        if prevIndex >= 0 {
-            currentIndex = prevIndex
-            play(track: queue[prevIndex])
-        } else {
-            currentIndex = queue.count - 1
-            play(track: queue[currentIndex])
+    /// The queue ran out: pause on the last track, back at its start.
+    private func stopAtEndOfQueue() {
+        pause()
+        seek(to: 0)
+    }
+
+    /// Autoplay: appends similar tracks (or tracks by the same artist or
+    /// genre) and plays the first of them.
+    private func continueWithSimilarTracks(after current: Track) {
+        Task {
+            let existingIDs = Set(self.queue.map { $0.id })
+            var newTracks: [Track] = []
+            if let related = try? await api.getRelatedTracks(trackID: current.id, limit: 10) {
+                newTracks = related.filter { !existingIDs.contains($0.id) && $0.isPlayable }
+            }
+            if newTracks.isEmpty {
+                let query = current.genre ?? current.user?.username ?? "Chill Hits"
+                if let results = try? await api.searchTracks(query: query, limit: 10, offset: 0) {
+                    newTracks = results.collection.filter { !existingIDs.contains($0.id) && $0.isPlayable }
+                }
+            }
+            let found = newTracks
+            await MainActor.run {
+                guard self.currentTrack?.id == current.id else { return } // the user moved on
+                if found.isEmpty {
+                    self.stopAtEndOfQueue()
+                } else {
+                    found.forEach(self.enqueue)
+                    self.nextTrack()
+                }
+            }
         }
     }
 
@@ -471,52 +517,12 @@ final class AudioPlayerEngine: ObservableObject {
             return
         }
 
-        if isRepeatEnabled && queue.count <= 1 {
+        if repeatMode == .one {
             seek(to: 0)
             resume()
             return
         }
-        if currentIndex + 1 < queue.count || isRepeatEnabled {
-            nextTrack()
-        } else if AppSettings.shared.autoPlayRelated, let current = currentTrack {
-            Task {
-                var newTracks: [Track] = []
-                // Attempt 1: Fetch related tracks
-                if let related = try? await api.getRelatedTracks(trackID: current.id, limit: 10) {
-                    let existingIDs = Set(self.queue.map { $0.id })
-                    let filtered = related.filter { !existingIDs.contains($0.id) }
-                    newTracks = filtered
-                }
-                // Attempt 2: If related tracks empty, fallback search by genre or artist
-                if newTracks.isEmpty {
-                    let query = current.genre ?? current.user?.username ?? "Chill Hits"
-                    if let searchRes = try? await api.searchTracks(query: query, limit: 10, offset: 0) {
-                        let existingIDs = Set(self.queue.map { $0.id })
-                        newTracks = searchRes.collection.filter { !existingIDs.contains($0.id) }
-                    }
-                }
-
-                if !newTracks.isEmpty {
-                    let tracksToEnqueue = newTracks
-                    await MainActor.run {
-                        for t in tracksToEnqueue {
-                            self.enqueue(t)
-                        }
-                        self.nextTrack()
-                    }
-                } else {
-                    await MainActor.run {
-                        self.playbackState = .paused
-                        self.currentTime = self.duration
-                        self.updateNowPlayingElapsedTime()
-                    }
-                }
-            }
-        } else {
-            playbackState = .paused
-            currentTime = duration
-            updateNowPlayingElapsedTime()
-        }
+        nextTrack()
     }
 
     private func handlePlaybackFailed(_ notification: Notification) {
@@ -538,7 +544,7 @@ final class AudioPlayerEngine: ObservableObject {
     private func failCurrentTrack(_ message: String) {
         playbackState = .failed(message)
         guard AppSettings.shared.autoSkipOnError,
-              currentIndex + 1 < queue.count || isRepeatEnabled else { return }
+              currentIndex + 1 < queue.count || repeatMode == .all else { return }
         let failedID = currentTrack?.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self = self, case .failed = self.playbackState,
@@ -769,4 +775,10 @@ enum AudioPlayerEngineWrapper {
 final class PlaybackClock: ObservableObject {
     @Published fileprivate(set) var currentTime: TimeInterval = 0
     @Published fileprivate(set) var bufferedTime: TimeInterval = 0
+}
+
+// MARK: - Repeat Mode
+
+enum RepeatMode: Int {
+    case off, all, one
 }

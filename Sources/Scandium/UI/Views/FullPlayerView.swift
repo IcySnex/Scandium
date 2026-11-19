@@ -116,7 +116,9 @@ struct FullPlayerView: View {
             Spacer()
             controlButton("forward.fill", size: 30) { player.nextTrack() }
             Spacer()
-            controlButton("repeat", size: 19, isOn: player.isRepeatEnabled) { player.toggleRepeat() }
+            controlButton(player.repeatMode == .one ? "repeat.1" : "repeat", size: 19,
+                          isOn: player.repeatMode != .off) { player.cycleRepeatMode() }
+                .accessibilityLabel(player.repeatMode == .one ? "Repeat One" : player.repeatMode == .all ? "Repeat All" : "Repeat Off")
         }
     }
 
