@@ -4,7 +4,7 @@
 // Mirrors soundcloud.com's home: the sections come from /mixed-selections
 // ("Made for you", "Recently Played", "More of what you like", mixes,
 // stations, ...). The feed loads once per launch; it only reloads when the
-// reload button is tapped or the page is pulled down.
+// page is pulled down.
 
 import SwiftUI
 
@@ -24,41 +24,40 @@ struct DiscoverView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                likedSongsCard
+        // A List, because on iOS 15 pull-to-refresh only works on lists
+        List {
+            likedSongsCard
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .homeRow()
+
+            if let error = store.error {
+                homeErrorBanner(error)
                     .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .homeRow()
+            }
 
-                if let error = store.error {
-                    homeErrorBanner(error)
-                        .padding(.horizontal, 16)
+            if store.selections.isEmpty && store.isLoading {
+                ForEach(0..<3, id: \.self) { _ in
+                    shimmerSection
+                        .padding(.vertical, 12)
+                        .homeRow()
                 }
-
-                if store.selections.isEmpty && store.isLoading {
-                    ForEach(0..<3, id: \.self) { _ in shimmerSection }
-                } else {
-                    ForEach(store.selections) { selection in
-                        selectionSection(selection)
-                    }
+            } else {
+                ForEach(store.selections) { selection in
+                    selectionSection(selection)
+                        .padding(.vertical, 12)
+                        .homeRow()
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 80) // Keep content clear of the mini player
+
+            MiniPlayerSpacerRow()
         }
+        .listStyle(PlainListStyle())
         .navigationTitle("Home")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                // Reload: refetches the home feed and re-syncs likes & playlists
-                if store.isLoading {
-                    ProgressView()
-                } else {
-                    Button(action: { Task { await store.reload(api: api) } }) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .accessibilityLabel("Reload")
-                }
-            }
-        }
+        // Pull down to refetch the feed and re-sync likes & playlists
         .refreshable {
             await store.reload(api: api)
         }
@@ -302,5 +301,15 @@ final class DiscoverDataStore: ObservableObject {
                 self.error = "Couldn't load your home feed: \(error.localizedDescription)"
             }
         }
+    }
+}
+
+private extension View {
+    /// A full-width Home row without separators or a tap highlight
+    func homeRow() -> some View {
+        self
+            .plainListRow()
+            .listRowBackground(Color.clear)
+            .buttonStyle(PlainButtonStyle())
     }
 }
