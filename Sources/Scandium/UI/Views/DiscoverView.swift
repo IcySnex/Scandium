@@ -249,14 +249,22 @@ final class DiscoverDataStore: ObservableObject {
     /// disappearing (which cancels its own task) can't cancel the request.
     private var feedTask: Task<Void, Never>?
 
+    private static let cacheName = "scandium_home_mixed_selections.json"
+
     private static var cacheFile: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("scandium_home_mixed_selections.json")
+            .appendingPathComponent(cacheName)
     }
 
     private init() {
         // Old search-based feed cache, no longer used
         UserDefaults.standard.removeObject(forKey: "scandium_discover_cached_payload_v1")
+
+        // A test build kept the feed in Application Support; it belongs in Caches
+        if let stray = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(Self.cacheName) {
+            try? FileManager.default.removeItem(at: stray)
+        }
 
         if let file = Self.cacheFile,
            let data = try? Data(contentsOf: file),
@@ -287,7 +295,12 @@ final class DiscoverDataStore: ObservableObject {
     private func loadFeed(api: SoundCloudAPI) async {
         if feedTask == nil {
             feedTask = Task { @MainActor in
-                await self.fetchFeed(api: api)
+                // A launch can hit a moment where the network isn't ready
+                // yet; try once more before showing an error
+                if await !self.fetchFeed(api: api, showsError: false) {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    await self.fetchFeed(api: api, showsError: true)
+                }
                 self.feedTask = nil
             }
         }
@@ -296,10 +309,13 @@ final class DiscoverDataStore: ObservableObject {
         await task?.value
     }
 
+    /// Returns whether the feed loaded. Errors are only shown when
+    /// `showsError` is set (the last attempt), and never for cancellations.
     @MainActor
-    private func fetchFeed(api: SoundCloudAPI) async {
+    @discardableResult
+    private func fetchFeed(api: SoundCloudAPI, showsError: Bool) async -> Bool {
         isLoading = true
-        error = nil
+        if showsError { error = nil }
         defer { isLoading = false }
 
         let token = SoundCloudAuthManager.shared.oauthToken
@@ -316,15 +332,19 @@ final class DiscoverDataStore: ObservableObject {
             guard !fresh.isEmpty else { throw APIError.invalidResponse }
             selections = fresh
             didLoadThisLaunch = true
+            error = nil
             if let file = Self.cacheFile {
                 try? data.write(to: file, options: .atomic)
             }
+            return true
         } catch where error.isCancellation {
             // Not a real failure: the next appearance tries again
+            return false
         } catch {
-            if selections.isEmpty {
+            if showsError && selections.isEmpty {
                 self.error = "Couldn't load your home feed: \(error.localizedDescription)"
             }
+            return false
         }
     }
 }

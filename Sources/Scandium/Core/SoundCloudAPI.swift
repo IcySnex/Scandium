@@ -732,7 +732,17 @@ extension Error {
     /// isn't a failure worth showing.
     var isCancellation: Bool {
         if self is CancellationError { return true }
-        if let urlError = self as? URLError, urlError.code == .cancelled { return true }
-        return (self as NSError).domain == NSURLErrorDomain && (self as NSError).code == NSURLErrorCancelled
+        // iOS reports a cancelled request as code -999 in more than one
+        // domain (NSURLErrorDomain, kCFErrorDomainCFNetwork), sometimes
+        // wrapped in another error
+        var error: NSError? = self as NSError
+        while let current = error {
+            if current.code == NSURLErrorCancelled,
+               current.domain == NSURLErrorDomain || current.domain == (kCFErrorDomainCFNetwork as String) {
+                return true
+            }
+            error = current.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
     }
 }
