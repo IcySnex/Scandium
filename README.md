@@ -13,6 +13,12 @@ This is a fork of [MeoHunterr/Scandium](https://github.com/MeoHunterr/Scandium).
 - **Audio quality.** Standard plays the smallest stream (128 kbps MP3 or 96 kbps AAC); High plays 160 kbps AAC; Best plays 256 kbps (SoundCloud Go+ accounts). Copy-protected tracks, which this can't play, are greyed out and left out of the queue.
 - **Light on battery.** No animated backgrounds, looping animations or background redraws; images decode off the main thread.
 
+## Screenshots
+
+| Home | Search | Library |
+| :---: | :---: | :---: |
+| <img src="assets/screenshots/home.png" width="240" alt="Home with your personalized SoundCloud sections"> | <img src="assets/screenshots/search.png" width="240" alt="Search results"> | <img src="assets/screenshots/library.png" width="240" alt="Liked songs in the library"> |
+
 ## Installing
 
 Download `Scandium-xxx.ipa` from [Releases](https://github.com/IcySnex/Scandium/releases) and install it with [TrollStore](https://github.com/opa334/TrollStore) or a sideloading tool such as [Sideloadly](https://sideloadly.io) or AltStore, which signs it with your own Apple ID.
