@@ -724,3 +724,15 @@ enum APIError: LocalizedError {
         }
     }
 }
+
+// MARK: - Cancellation
+
+extension Error {
+    /// A request that was cancelled (its task or view went away), which
+    /// isn't a failure worth showing.
+    var isCancellation: Bool {
+        if self is CancellationError { return true }
+        if let urlError = self as? URLError, urlError.code == .cancelled { return true }
+        return (self as NSError).domain == NSURLErrorDomain && (self as NSError).code == NSURLErrorCancelled
+    }
+}

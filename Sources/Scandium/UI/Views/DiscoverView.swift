@@ -64,6 +64,10 @@ struct DiscoverView: View {
         .task {
             await store.loadIfNeeded(api: api)
         }
+        // Retry a failed load when the app comes back to the foreground
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await store.loadIfNeeded(api: api) }
+        }
     }
 
     // MARK: - Liked Songs
@@ -238,8 +242,12 @@ final class DiscoverDataStore: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published var error: String?
 
-    /// The feed is fetched once per launch; afterwards only `reload` refetches.
+    /// The feed is fetched once per launch (until it succeeds); afterwards
+    /// only `reload` refetches.
     private var didLoadThisLaunch = false
+    /// The running fetch. The store owns it rather than the view, so the view
+    /// disappearing (which cancels its own task) can't cancel the request.
+    private var feedTask: Task<Void, Never>?
 
     private static var cacheFile: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -257,21 +265,35 @@ final class DiscoverDataStore: ObservableObject {
         }
     }
 
+    /// Loads the feed unless it already loaded this launch. Called whenever
+    /// Home appears and when the app returns to the foreground, so a failed
+    /// load is retried.
     @MainActor
     func loadIfNeeded(api: SoundCloudAPI) async {
         guard !didLoadThisLaunch else { return }
-        didLoadThisLaunch = true
-        await fetchFeed(api: api)
+        await loadFeed(api: api)
     }
 
     /// Refetches the home feed and re-syncs the library (likes & playlists).
     @MainActor
     func reload(api: SoundCloudAPI) async {
-        guard !isLoading else { return }
-        didLoadThisLaunch = true
-        async let feed: Void = fetchFeed(api: api)
+        async let feed: Void = loadFeed(api: api)
         async let library: Void = SoundCloudAuthManager.shared.syncLibrary()
         _ = await (feed, library)
+    }
+
+    /// Joins the running fetch, or starts one.
+    @MainActor
+    private func loadFeed(api: SoundCloudAPI) async {
+        if feedTask == nil {
+            feedTask = Task { @MainActor in
+                await self.fetchFeed(api: api)
+                self.feedTask = nil
+            }
+        }
+        // Awaiting the value doesn't pass this caller's cancellation on
+        let task = feedTask
+        await task?.value
     }
 
     @MainActor
@@ -293,9 +315,12 @@ final class DiscoverDataStore: ObservableObject {
             let fresh = try SoundCloudAPI.decodeSelections(data)
             guard !fresh.isEmpty else { throw APIError.invalidResponse }
             selections = fresh
+            didLoadThisLaunch = true
             if let file = Self.cacheFile {
                 try? data.write(to: file, options: .atomic)
             }
+        } catch where error.isCancellation {
+            // Not a real failure: the next appearance tries again
         } catch {
             if selections.isEmpty {
                 self.error = "Couldn't load your home feed: \(error.localizedDescription)"

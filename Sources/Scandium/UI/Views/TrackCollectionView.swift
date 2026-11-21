@@ -111,6 +111,10 @@ struct TrackCollectionView: View {
         guard isLoading else { return }
         do {
             tracks = try await load(api)
+        } catch where error.isCancellation {
+            // The page went away mid-load: stay "loading" so it retries
+            // when it appears again, instead of showing an error
+            return
         } catch {
             loadFailed = true
         }
